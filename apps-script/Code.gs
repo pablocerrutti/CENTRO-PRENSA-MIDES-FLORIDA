@@ -39,7 +39,8 @@ function doPost(e){
     if(p.action==='adminList')return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});
     if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});
     if(p.action==='save')return json_({ok:true,item:save_(p)});
-    if(p.action==='uploadVideo')return json_({ok:true,video:uploadVideo_(p)});
+    if(p.action==='uploadVideoStart')return json_({ok:true,upload:uploadVideoStart_(p)});
+    if(p.action==='uploadVideoChunk')return json_({ok:true,upload:uploadVideoChunk_(p)});
     if(p.action==='uploadImages')return json_({ok:true,images:uploadImages_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
     if(p.action==='publish')return json_({ok:setStatus_(p.id,'Publicado'),item:findById_(p.id)});
@@ -75,23 +76,44 @@ function save_(p){
   if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,row.length).setValues([row]);
   return item;
 }
-function uploadVideo_(p){
+function uploadVideoStart_(p){
   if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
-  if(!p.fileName||!p.fileData)throw new Error('No se recibió el archivo de video.');
-  const data=String(p.fileData).replace(/^data:[^;]+;base64,/,'');
+  if(!p.fileName)throw new Error('No se recibió el nombre del video.');
+  const root=getDriveRoot_(),titleFolder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id),mime=p.mimeType||'video/mp4';
+  const response=UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',{
+    method:'post',contentType:'application/json; charset=UTF-8',
+    headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken(),'X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(p.totalSize||0)},
+    payload:JSON.stringify({name:p.fileName,mimeType:mime,parents:[titleFolder.getId()]}),muteHttpExceptions:true,followRedirects:false
+  });
+  const status=response.getResponseCode(),headers=response.getAllHeaders();
+  if(status<200||status>=300)throw new Error('No se pudo iniciar la carga en Google Drive: HTTP '+status+' '+response.getContentText());
+  const location=headers.Location||headers.location;
+  if(!location)throw new Error('Google Drive no devolvió la URL de carga reanudable.');
+  return {sessionUrl:String(location),folderId:titleFolder.getId(),folderName:titleFolder.getName()};
+}
+function uploadVideoChunk_(p){
+  if(!p.sessionUrl)throw new Error('Falta la sesión de carga de Google Drive.');
+  const total=Number(p.totalSize||0),start=Number(p.start||0),end=Number(p.end||0);
+  if(!total||end<=start||end>total)throw new Error('Rango de video inválido.');
+  const data=String(p.chunkData||'').replace(/^data:[^;]+;base64,/,'');
+  if(!data)throw new Error('No se recibió el fragmento del video.');
   const bytes=Utilities.base64Decode(data);
-  // Sin límite de tamaño impuesto por nuestra lógica; Google Apps Script puede aplicar sus propios límites de solicitud/ejecución.
-  const mime=p.mimeType||MimeType.MP4;
-  const blob=Utilities.newBlob(bytes,mime,p.fileName);
-  const root=getDriveRoot_();
-  const titleFolder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id);
-  const file=titleFolder.createFile(blob);
-  try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
+  const response=UrlFetchApp.fetch(p.sessionUrl,{method:'put',headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken(),'Content-Length':String(bytes.length),'Content-Range':'bytes '+start+'-'+(end-1)+'/'+total},payload:bytes,muteHttpExceptions:true,followRedirects:false});
+  const status=response.getResponseCode();
+  if(status===308){
+    const h=response.getAllHeaders(),range=h.Range||h.range||'';
+    return {complete:false,nextStart:range?parseInt(String(range).split('-').pop(),10)+1:end};
+  }
+  if(status!==200&&status!==201)throw new Error('Google Drive rechazó el fragmento: HTTP '+status+' '+response.getContentText());
+  const file=JSON.parse(response.getContentText());
+  if(!file.id)throw new Error('Google Drive no devolvió el ID del archivo.');
+  try{DriveApp.getFileById(file.id).setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
   const sh=getSheet_(),row=findRow_(sh,p.id);
   if(row<0)throw new Error('No se encontró el comunicado para asociar el video.');
-  sh.getRange(row,12,1,4).setValues([[file.getId(),file.getUrl(),titleFolder.getId(),formatDateTime_(new Date())]]);
+  const fileUrl='https://drive.google.com/file/d/'+file.id+'/view',previewUrl='https://drive.google.com/file/d/'+file.id+'/preview';
+  sh.getRange(row,12,1,4).setValues([[file.id,fileUrl,p.folderId||'',formatDateTime_(new Date())]]);
   sh.getRange(row,16).setValue(formatDateTime_(new Date()));
-  return {fileId:file.getId(),fileUrl:file.getUrl(),previewUrl:'https://drive.google.com/file/d/'+file.getId()+'/preview',folderId:titleFolder.getId(),folderName:titleFolder.getName(),name:file.getName()};
+  return {complete:true,fileId:file.id,fileUrl:fileUrl,previewUrl:previewUrl,folderId:p.folderId||'',folderName:p.folderName||'',name:file.name||''};
 }
 function uploadImages_(p){
   if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
