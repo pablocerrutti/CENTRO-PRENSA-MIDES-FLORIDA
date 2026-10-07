@@ -40,6 +40,7 @@ function doPost(e){
     if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});
     if(p.action==='save')return json_({ok:true,item:save_(p)});
     if(p.action==='uploadVideo')return json_({ok:true,video:uploadVideo_(p)});
+    if(p.action==='uploadImages')return json_({ok:true,images:uploadImages_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
     if(p.action==='publish')return json_({ok:setStatus_(p.id,'Publicado'),item:findById_(p.id)});
     if(p.action==='unpublish')return json_({ok:setStatus_(p.id,'Borrador'),item:findById_(p.id)});
@@ -93,6 +94,25 @@ function uploadVideo_(p){
   sh.getRange(row,12,1,4).setValues([[file.getId(),file.getUrl(),titleFolder.getId(),formatDateTime_(new Date())]]);
   sh.getRange(row,16).setValue(formatDateTime_(new Date()));
   return {fileId:file.getId(),fileUrl:file.getUrl(),previewUrl:'https://drive.google.com/file/d/'+file.getId()+'/preview',folderId:titleFolder.getId(),folderName:titleFolder.getName(),name:file.getName()};
+}
+function uploadImages_(p){
+  if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
+  if(!p.files)throw new Error('No se recibieron imágenes.');
+  const files=JSON.parse(p.files),max=10*1024*1024,root=getDriveRoot_(),photos=getOrCreateFolder_(root,'Fotos'),titleFolder=getOrCreateFolder_(photos,safeFolderName_(p.titulo||'Comunicado '+p.id)),uploaded=[];
+  files.forEach(f=>{
+    const data=String(f.data||'').replace(/^data:[^;]+;base64,/,'');
+    const bytes=Utilities.base64Decode(data);
+    if(bytes.length>max)throw new Error('La imagen '+f.name+' supera el límite de 10 MB.');
+    const file=titleFolder.createFile(Utilities.newBlob(bytes,f.type||'image/jpeg',f.name));
+    try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
+    uploaded.push({id:file.getId(),name:file.getName(),url:file.getUrl(),directUrl:'https://drive.google.com/uc?export=view&id='+file.getId()});
+  });
+  const sh=getSheet_(),row=findRow_(sh,p.id);
+  if(row<0)throw new Error('No se encontró el comunicado para asociar las imágenes.');
+  const current=splitPhotos_(sh.getRange(row,10).getValue());
+  sh.getRange(row,10).setValue(current.concat(uploaded.map(x=>x.directUrl)).join('\n'));
+  sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  return {folderId:titleFolder.getId(),folderName:titleFolder.getName(),items:uploaded};
 }
 function getDriveRoot_(){return CONFIG.driveRootFolderId?DriveApp.getFolderById(CONFIG.driveRootFolderId):DriveApp.getRootFolder();}
 function getOrCreateFolder_(parent,name){const it=parent.getFoldersByName(name);return it.hasNext()?it.next():parent.createFolder(name);}
