@@ -2,7 +2,7 @@ const CONFIG = {
   spreadsheetId: '',
   sheetName: 'Comunicados',
   adminKey: 'CAMBIAR-ESTA-CLAVE',
-  driveRootFolderId: ''
+  driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
 const HEADERS = ['ID','Estado','Fecha','Categoria','Tag','Titulo','Resumen','Contenido','FotoPrincipal','Fotos','VideoURL','VideoDriveFileId','VideoDriveUrl','VideoDriveFolderId','FechaCreacion','FechaActualizacion'];
@@ -85,8 +85,7 @@ function uploadVideo_(p){
   const mime=p.mimeType||MimeType.MP4;
   const blob=Utilities.newBlob(bytes,mime,p.fileName);
   const root=getDriveRoot_();
-  const videos=getOrCreateFolder_(root,'Videos');
-  const titleFolder=getOrCreateFolder_(videos,safeFolderName_(p.titulo||'Comunicado '+p.id));
+  const titleFolder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id);
   const file=titleFolder.createFile(blob);
   try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
   const sh=getSheet_(),row=findRow_(sh,p.id);
@@ -98,7 +97,7 @@ function uploadVideo_(p){
 function uploadImages_(p){
   if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
   if(!p.files)throw new Error('No se recibieron imágenes.');
-  const files=JSON.parse(p.files),max=10*1024*1024,root=getDriveRoot_(),photos=getOrCreateFolder_(root,'Fotos'),titleFolder=getOrCreateFolder_(photos,safeFolderName_(p.titulo||'Comunicado '+p.id)),uploaded=[];
+  const files=JSON.parse(p.files),max=10*1024*1024,root=getDriveRoot_(),titleFolder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id),uploaded=[];
   files.forEach(f=>{
     const data=String(f.data||'').replace(/^data:[^;]+;base64,/,'');
     const bytes=Utilities.base64Decode(data);
@@ -116,6 +115,10 @@ function uploadImages_(p){
 }
 function getDriveRoot_(){return CONFIG.driveRootFolderId?DriveApp.getFolderById(CONFIG.driveRootFolderId):DriveApp.getRootFolder();}
 function getOrCreateFolder_(parent,name){const it=parent.getFoldersByName(name);return it.hasNext()?it.next():parent.createFolder(name);}
+function getOrCreateCommunicationFolder_(parent,title){
+  const name=String(title||'Comunicado').trim().slice(0,150)||'Comunicado';
+  return getOrCreateFolder_(parent,name);
+}
 function safeFolderName_(name){return String(name).replace(/[\\/:*?"<>|#%{}~&]/g,' ').replace(/\s+/g,' ').trim().slice(0,150)||'Comunicado';}
 function findRow_(sh,id){const v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id))return i+1;return -1;}
 function setStatus_(id,status){
