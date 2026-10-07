@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Panel editorial | Centro de Prensa</title><link rel="stylesheet" href="assets/css/style.css">
+<title>Panel editorial | Centro de Prensa</title>
+<link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body class="admin-body">
 <header class="site-header">
@@ -13,15 +14,72 @@
   <a class="admin-link" href="index.html">Ver sala de prensa</a>
 </header>
 <main class="admin-main">
-  <section class="page-title"><p class="eyebrow">GESTIÓN</p><h1>Centro de Prensa</h1><p>Primera interfaz editorial. En la siguiente etapa conectaremos persistencia, multimedia y mailing.</p></section>
+  <section class="page-title">
+    <p class="eyebrow">GESTIÓN EDITORIAL</p>
+    <h1>Centro de Prensa</h1>
+    <p>Redactá, revisá y prepará los contenidos institucionales para su publicación.</p>
+  </section>
+
+  <section class="editor-card">
+    <div class="section-heading"><div><p class="eyebrow">CONTENIDO</p><h2 id="form-title">Nuevo comunicado</h2></div><span id="editor-status" class="status">Borrador</span></div>
+    <form id="editor-form">
+      <input type="hidden" id="edit-id">
+      <div class="form-grid">
+        <label>Título<input id="title" required maxlength="180" placeholder="Título del comunicado"></label>
+        <label>Fecha<input id="date" type="date" required></label>
+        <label>Categoría<select id="category"><option>Comunicado</option><option>Actividad</option><option>Programa</option><option>Institucional</option><option>Convocatoria</option></select></label>
+        <label>Etiqueta<input id="tag" maxlength="60" placeholder="Florida"></label>
+        <label class="full">Resumen<textarea id="summary" rows="3" maxlength="320" placeholder="Resumen breve para la portada"></textarea></label>
+        <label class="full">Contenido<textarea id="content" rows="12" placeholder="Redactá aquí el comunicado completo"></textarea></label>
+      </div>
+      <div class="form-actions">
+        <button type="submit">Guardar borrador</button>
+        <button type="button" class="secondary" id="publish-btn">Publicar</button>
+        <button type="button" class="ghost" id="clear-btn">Limpiar</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="editor-card">
+    <div class="section-heading"><div><p class="eyebrow">CONTENIDOS</p><h2>Comunicados guardados</h2></div><span id="count" class="status">0</span></div>
+    <div id="draft-list" class="draft-list"><p class="empty-state">Todavía no hay comunicados cargados.</p></div>
+  </section>
+
   <div class="dashboard-grid">
-    <article class="dashboard-card"><span class="icon">01</span><h2>Comunicados</h2><p>Crear, editar, publicar y archivar comunicados.</p><button onclick="showNotice('Editor de comunicados: próxima etapa')">Nuevo comunicado</button></article>
-    <article class="dashboard-card"><span class="icon">02</span><h2>Multimedia</h2><p>Fotografías, videos y documentos asociados a cada actividad.</p><button onclick="showNotice('Biblioteca multimedia: próxima etapa')">Abrir biblioteca</button></article>
-    <article class="dashboard-card"><span class="icon">03</span><h2>Medios</h2><p>Agenda de contactos y grupos de distribución.</p><button onclick="showNotice('Gestión de medios: próxima etapa')">Gestionar medios</button></article>
-    <article class="dashboard-card"><span class="icon">04</span><h2>Mailing</h2><p>Preparar y enviar campañas a listas de prensa.</p><button onclick="showNotice('Mailing: próxima etapa')">Nueva campaña</button></article>
+    <article class="dashboard-card"><span class="icon">02</span><h2>Multimedia</h2><p>Fotografías, videos y documentos asociados a cada actividad.</p><button type="button" onclick="showNotice('Biblioteca multimedia: siguiente módulo')">Abrir biblioteca</button></article>
+    <article class="dashboard-card"><span class="icon">03</span><h2>Medios</h2><p>Agenda de contactos y grupos de distribución.</p><button type="button" onclick="showNotice('Gestión de medios: siguiente módulo')">Gestionar medios</button></article>
+    <article class="dashboard-card"><span class="icon">04</span><h2>Mailing</h2><p>Preparar y enviar campañas a listas de prensa.</p><button type="button" onclick="showNotice('Mailing: siguiente módulo')">Nueva campaña</button></article>
   </div>
-  <section class="status-panel"><div><strong>Arquitectura</strong><span>GitHub Pages + Google Sheets + Google Drive</span></div><div><strong>Estado</strong><span class="status">Base visual instalada</span></div></section>
+
+  <section class="status-panel">
+    <div><strong>Arquitectura</strong><span>GitHub Pages + Google Sheets + Google Drive</span></div>
+    <div><strong>Estado</strong><span class="status">Editor local de trabajo</span></div>
+  </section>
 </main>
 <div id="notice" class="toast" hidden></div>
-<script>function showNotice(t){const n=document.getElementById('notice');n.textContent=t;n.hidden=false;setTimeout(()=>n.hidden=true,2600)}</script>
+<script>
+const KEY='mides_press_drafts';
+const $=id=>document.getElementById(id);
+const today=new Date().toISOString().slice(0,10);
+$('date').value=today;
+
+function showNotice(t){const n=$('notice');n.textContent=t;n.hidden=false;setTimeout(()=>n.hidden=true,2600)}
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]}}
+function save(items){localStorage.setItem(KEY,JSON.stringify(items))}
+function reset(){ $('editor-form').reset(); $('edit-id').value=''; $('date').value=today; $('form-title').textContent='Nuevo comunicado'; $('editor-status').textContent='Borrador'; }
+function fill(item){$('edit-id').value=item.id;$('title').value=item.title;$('date').value=item.date;$('category').value=item.category;$('tag').value=item.tag||'';$('summary').value=item.summary||'';$('content').value=item.content||'';$('form-title').textContent='Editar comunicado';$('editor-status').textContent=item.status==='Publicado'?'Publicado':'Borrador';window.scrollTo({top:0,behavior:'smooth'})}
+function render(){
+ const items=load(); $('count').textContent=items.length+' '+(items.length===1?'contenido':'contenidos');
+ if(!items.length){$('draft-list').innerHTML='<p class="empty-state">Todavía no hay comunicados cargados.</p>';return}
+ $('draft-list').innerHTML=items.map(x=>'<article class="draft-item"><div><span class="draft-meta">'+x.date+' · '+x.category+' · '+x.status+'</span><h3>'+esc(x.title)+'</h3><p>'+esc(x.summary||'Sin resumen')+'</p></div><div class="draft-actions"><button type="button" onclick="editItem(\''+x.id+'\')">Editar</button><button type="button" class="secondary" onclick="togglePublish(\''+x.id+'\')">'+(x.status==='Publicado'?'Despublicar':'Publicar')+'</button><button type="button" class="ghost" onclick="deleteItem(\''+x.id+'\')">Eliminar</button></div></article>').join('')
+}
+function esc(v){return String(v).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+window.editItem=id=>{const x=load().find(i=>i.id===id);if(x)fill(x)}
+window.togglePublish=id=>{const a=load(),x=a.find(i=>i.id===id);if(!x)return;x.status=x.status==='Publicado'?'Borrador':'Publicado';save(a);render();showNotice(x.status==='Publicado'?'Comunicado publicado':'Comunicado pasado a borrador')}
+window.deleteItem=id=>{if(!confirm('¿Eliminar este comunicado?'))return;save(load().filter(i=>i.id!==id));render();showNotice('Comunicado eliminado')}
+$('editor-form').addEventListener('submit',e=>{e.preventDefault();const a=load(),id=$('edit-id').value||Date.now().toString(),old=a.find(x=>x.id===id);const item={id,title:$('title').value.trim(),date:$('date').value,category:$('category').value,tag:$('tag').value.trim(),summary:$('summary').value.trim(),content:$('content').value.trim(),status:old?.status||'Borrador'};const i=a.findIndex(x=>x.id===id);if(i>=0)a[i]=item;else a.unshift(item);save(a);render();fill(item);showNotice('Borrador guardado')})
+$('publish-btn').addEventListener('click',()=>{$('editor-form').requestSubmit();setTimeout(()=>{const id=$('edit-id').value,a=load(),x=a.find(i=>i.id===id);if(x){x.status='Publicado';save(a);render();$('editor-status').textContent='Publicado';showNotice('Comunicado publicado')}},0)})
+$('clear-btn').addEventListener('click',reset);
+render();
+</script>
 </body></html>
