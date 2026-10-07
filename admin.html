@@ -21,10 +21,10 @@
   <div class="media-editor-title"><span class="eyebrow blue">MATERIAL MULTIMEDIA</span><h3>Fotos y video de la actividad</h3><p>Podés agregar una foto principal y varias fotos adicionales mediante enlaces. El video se carga directamente desde esta pantalla y se almacena en Google Drive, organizado por comunicado.</p></div>
   <div class="form-grid media-grid">
     <label class="full">Foto principal<input id="coverImage" type="url" placeholder="https://.../foto-principal.jpg"></label>
-    <label class="full">Seleccionar imágenes<input id="imageFiles" type="file" accept="image/*" multiple><small class="field-help">Podés seleccionar varias imágenes a la vez. Se guardarán en Google Drive dentro de <strong>Fotos / título del comunicado</strong>.</small></label>
+    <label class="full">Seleccionar imágenes<input id="imageFiles" type="file" accept="image/*" multiple><small class="field-help">Podés seleccionar varias imágenes a la vez. Se guardarán en Google Drive dentro de la carpeta del comunicado.</small></label>
     <div class="upload-status full" id="image-upload-status">No hay imágenes nuevas seleccionadas.</div>
     <label class="full">Fotos adicionales<textarea id="gallery" rows="4" placeholder="También podés pegar URLs de imágenes, una por línea."></textarea></label>
-    <label class="full">Video relacionado<input id="videoFile" type="file" accept="video/*"><small class="field-help">El video se subirá a Google Drive dentro de <strong>Videos / título del comunicado</strong>. Límite actual: 30 MB.</small></label>
+    <label class="full">Video relacionado<input id="videoFile" type="file" accept="video/*"><small class="field-help">El video se subirá a Google Drive dentro de la carpeta del comunicado. La carga se realiza por fragmentos y no tiene un límite artificial de 30 MB.</small></label>
     <label class="full">Video guardado<input id="videoUrl" type="url" readonly placeholder="Se completará automáticamente al subir el video"></label>
     <div class="upload-status full" id="video-upload-status">No hay video nuevo seleccionado.</div>
   </div>
@@ -86,15 +86,28 @@ async function uploadPendingImages(id,title){
  return result.images;
 }
 $("videoFile").addEventListener("change",e=>{pendingVideo=e.target.files[0]||null;$("video-upload-status").textContent=pendingVideo?"Video seleccionado: "+pendingVideo.name+" ("+(pendingVideo.size/1024/1024).toFixed(1)+" MB)":"No hay video nuevo seleccionado.";});
+async function fileChunkData(blob){
+ const reader=new FileReader();
+ return await new Promise((resolve,reject)=>{reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("No se pudo leer un fragmento del video."));reader.readAsDataURL(blob)});
+}
 async function uploadPendingVideo(id,title){
  if(!pendingVideo)return null;
- if(pendingVideo.size>30*1024*1024)throw new Error("El video supera el límite de 30 MB.");
- $("video-upload-status").textContent="Subiendo video a Google Drive…";
- const reader=new FileReader();
- const data=await new Promise((resolve,reject)=>{reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("No se pudo leer el video."));reader.readAsDataURL(pendingVideo)});
- const result=await post("uploadVideo",{id,titulo:title,fileName:pendingVideo.name,mimeType:pendingVideo.type||"video/mp4",fileData:data});
- pendingVideo=null;$("videoFile").value="";$("videoUrl").value=result.video.previewUrl;$("video-upload-status").textContent="Video guardado en Drive: "+result.video.folderName;
- return result.video;
+ const file=pendingVideo,chunkSize=4*1024*1024,total=file.size;
+ $("video-upload-status").textContent="Preparando carga por fragmentos a Google Drive…";
+ const start=await post("uploadVideoStart",{id,titulo:title,fileName:file.name,mimeType:file.type||"video/mp4",totalSize:String(total)});
+ let offset=0,last=null;
+ while(offset<total){
+   const end=Math.min(offset+chunkSize,total);
+   const data=await fileChunkData(file.slice(offset,end));
+   $("video-upload-status").textContent="Subiendo a Google Drive: "+Math.round(end/total*100)+"%";
+   const result=await post("uploadVideoChunk",{id,sessionUrl:start.upload.sessionUrl,folderId:start.upload.folderId,folderName:start.upload.folderName,totalSize:String(total),start:String(offset),end:String(end),chunkData:data});
+   last=result.upload;
+   if(last.complete)break;
+   offset=Number(last.nextStart||end);
+ }
+ if(!last||!last.complete)throw new Error("La carga del video no llegó a completarse.");
+ pendingVideo=null;$("videoFile").value="";$("videoUrl").value=last.previewUrl;$("video-upload-status").textContent="Video guardado en Drive: "+last.folderName;
+ return last;
 }
 window.editItem=id=>{const x=items.find(i=>i.id===id);if(x)fill(x)}
 window.togglePublish=async id=>{try{const x=items.find(i=>i.id===id),action=x.estado==="Publicado"?"unpublish":"publish";await post(action,{id});showNotice(action==="publish"?"Comunicado publicado":"Comunicado pasado a borrador");await load()}catch(e){showNotice(e.message)}}
