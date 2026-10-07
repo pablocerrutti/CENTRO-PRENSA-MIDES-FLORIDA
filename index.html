@@ -12,30 +12,57 @@
   <div class="brand-wrap">
     <img class="brand-logo" src="https://www.gub.uy/ministerio-desarrollo-social/sites/ministerio-desarrollo-social/files/styles/documento/public/imagenes/publicaciones/logo_mides.png" alt="Ministerio de Desarrollo Social">
     <div class="brand-divider"></div>
-    <div><strong>CENTRO DE PRENSA</strong><span>MIDES Florida</span></div>
+    <div class="brand-name"><strong>CENTRO DE PRENSA</strong><span>MIDES Florida</span></div>
   </div>
-  <a class="admin-link" href="admin.html">Acceso editorial</a>
+  <nav class="top-nav" aria-label="Navegación principal">
+    <a href="#actualidad">Actualidad</a>
+    <a href="#recursos">Recursos</a>
+    <a class="admin-link" href="admin.html">Acceso editorial</a>
+  </nav>
 </header>
+
 <main>
   <section class="hero">
-    <div>
-      <p class="eyebrow">MIDES · FLORIDA</p>
-      <h1>Información y materiales para medios de comunicación</h1>
-      <p class="hero-copy">Comunicados, fotografías, videos y documentos oficiales disponibles para cobertura periodística.</p>
+    <div class="hero-copy-wrap">
+      <p class="eyebrow">MINISTERIO DE DESARROLLO SOCIAL · FLORIDA</p>
+      <h1>Centro de Prensa</h1>
+      <p class="hero-lead">Información oficial, comunicados y materiales para facilitar la cobertura periodística de las actividades del MIDES en Florida.</p>
+      <div class="hero-actions">
+        <a class="button button-light" href="#actualidad">Ver actualidad</a>
+        <a class="button button-outline" href="#recursos">Recursos para medios</a>
+      </div>
     </div>
-    <div class="hero-card">
-      <span>Centro de Prensa</span>
+    <div class="hero-panel">
+      <span class="panel-label">SALA DE PRENSA</span>
       <strong>Material oficial</strong>
-      <small>Una fuente organizada para periodistas y medios.</small>
+      <p>Un espacio centralizado para comunicados, fotografías, videos y documentos.</p>
     </div>
   </section>
-  <section class="toolbar">
-    <label class="search"><span>⌕</span><input id="search" type="search" placeholder="Buscar comunicados, actividades o temas..."></label>
-    <select id="category"><option value="">Todas las categorías</option><option>Actividad</option><option>Programa</option><option>Comunicado</option><option>Convocatoria</option></select>
+
+  <section id="actualidad" class="section">
+    <div class="section-heading">
+      <div><p class="eyebrow blue">ACTUALIDAD</p><h2>Últimos comunicados</h2></div>
+      <span id="resultCount" class="result-count"></span>
+    </div>
+    <div class="toolbar">
+      <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscar comunicados, actividades o temas..." aria-label="Buscar contenidos"></label>
+      <select id="category" aria-label="Filtrar por categoría">
+        <option value="">Todas las categorías</option><option>Actividad</option><option>Programa</option><option>Comunicado</option><option>Convocatoria</option>
+      </select>
+    </div>
+    <section id="newsGrid" class="news-grid" aria-live="polite"></section>
   </section>
-  <section class="content-heading"><div><p class="eyebrow">ACTUALIDAD</p><h2>Últimos comunicados</h2></div><span id="resultCount"></span></section>
-  <section id="newsGrid" class="news-grid"></section>
+
+  <section id="recursos" class="resources">
+    <div><p class="eyebrow blue">PARA MEDIOS</p><h2>Recursos de prensa</h2><p>La plataforma está preparada para reunir en un único lugar los materiales necesarios para la cobertura de las actividades de MIDES Florida.</p></div>
+    <div class="resource-grid">
+      <div class="resource-card"><b>01</b><strong>Fotografías</strong><span>Galerías y material de uso periodístico.</span></div>
+      <div class="resource-card"><b>02</b><strong>Videos</strong><span>Material audiovisual asociado a cada actividad.</span></div>
+      <div class="resource-card"><b>03</b><strong>Documentos</strong><span>Comunicados, fichas y documentos oficiales.</span></div>
+    </div>
+  </section>
 </main>
+
 <footer><span>Ministerio de Desarrollo Social · MIDES Florida</span><a href="https://www.gub.uy/ministerio-desarrollo-social/" target="_blank" rel="noopener">Sitio oficial MIDES</a></footer>
 <script src="assets/js/app.js"></script>
 </body>
