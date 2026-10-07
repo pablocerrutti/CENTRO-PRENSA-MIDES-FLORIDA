@@ -45,7 +45,7 @@
 let editorKey="",items=[],pendingVideo=null,pendingImages=[];
 const $=id=>document.getElementById(id),today=new Date().toISOString().slice(0,10);
 $("date").value=today;
-function showNotice(t){const n=$("notice");n.textContent=t;n.hidden=false;setTimeout(()=>n.hidden=true,2800)}
+function showNotice(t,type="success"){const n=$("notice");n.textContent=t;n.className="toast "+type;n.hidden=false;clearTimeout(window.noticeTimer);window.noticeTimer=setTimeout(()=>n.hidden=true,4200)}
 function esc(v){return String(v??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
 function key(){if(editorKey)return editorKey;editorKey=prompt("Ingrese la clave editorial de Google Apps Script:")||"";return editorKey}
 async function post(action,extra={}){
@@ -110,11 +110,11 @@ async function uploadPendingVideo(id,title){
  return last;
 }
 window.editItem=id=>{const x=items.find(i=>i.id===id);if(x)fill(x)}
-window.togglePublish=async id=>{try{const x=items.find(i=>i.id===id),action=x.estado==="Publicado"?"unpublish":"publish";await post(action,{id});showNotice(action==="publish"?"Comunicado publicado":"Comunicado pasado a borrador");await load()}catch(e){showNotice(e.message)}}
-window.deleteItem=async id=>{if(!confirm("¿Eliminar este comunicado?"))return;try{await post("delete",{id});showNotice("Comunicado eliminado");reset();await load()}catch(e){showNotice(e.message)}}
+window.togglePublish=async id=>{try{const x=items.find(i=>i.id===id),action=x.estado==="Publicado"?"unpublish":"publish";await post(action,{id});showNotice(action==="publish"?"Comunicado publicado":"Comunicado pasado a borrador");await load()}catch(e){showNotice("⚠ "+e.message,"error")}}
+window.deleteItem=async id=>{if(!confirm("¿Eliminar este comunicado?"))return;try{await post("delete",{id});showNotice("✓ Comunicado eliminado.","success");reset();await load()}catch(e){showNotice(e.message)}}
 function payload(){return{id:$("edit-id").value,fecha:$("date").value,categoria:$("category").value,tag:$("tag").value.trim(),titulo:$("title").value.trim(),resumen:$("summary").value.trim(),contenido:$("content").value.trim(),...mediaPayload()}}
-$("editor-form").addEventListener("submit",async e=>{e.preventDefault();try{const data=await post("save",payload());await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("Borrador guardado y multimedia actualizada");await load()}catch(err){showNotice(err.message)}})
-$("publish-btn").addEventListener("click",async()=>{try{const data=await post("save",payload());await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);await post("publish",{id:data.item.id});const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("Comunicado publicado");await load()}catch(err){showNotice(err.message)}})
+$("editor-form").addEventListener("submit",async e=>{e.preventDefault();try{const data=await post("save",payload());await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("✓ Borrador guardado correctamente. La información y la multimedia quedaron actualizadas.","success");await load()}catch(err){showNotice("⚠ "+err.message,"error")}})
+$("publish-btn").addEventListener("click",async()=>{try{const data=await post("save",payload());await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);await post("publish",{id:data.item.id});const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("✓ Comunicado publicado correctamente. Ya está disponible en la sala de prensa.","success");await load()}catch(err){showNotice(err.message)}})
 $("clear-btn").addEventListener("click",reset);
 load();
 </script></body></html>
