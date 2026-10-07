@@ -86,28 +86,31 @@ async function uploadPendingImages(id,title){
  return result.images;
 }
 $("videoFile").addEventListener("change",e=>{pendingVideo=e.target.files[0]||null;$("video-upload-status").textContent=pendingVideo?"Video seleccionado: "+pendingVideo.name+" ("+(pendingVideo.size/1024/1024).toFixed(1)+" MB)":"No hay video nuevo seleccionado.";});
-async function fileChunkData(blob){
- const reader=new FileReader();
- return await new Promise((resolve,reject)=>{reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("No se pudo leer un fragmento del video."));reader.readAsDataURL(blob)});
+async function directUploadChunk(sessionUrl,blob,start,end,total){
+ const response=await fetch(sessionUrl,{method:"PUT",headers:{"Content-Length":String(end-start),"Content-Range":"bytes "+start+"-"+(end-1)+"/"+total},body:blob});
+ if(response.status===308)return {complete:false,nextStart:end};
+ if(response.status!==200&&response.status!==201)throw new Error("Google Drive rechazó el fragmento: HTTP "+response.status);
+ const file=await response.json();
+ if(!file.id)throw new Error("Google Drive no devolvió el ID del video.");
+ return {complete:true,fileId:file.id,name:file.name||""};
 }
 async function uploadPendingVideo(id,title){
  if(!pendingVideo)return null;
  const file=pendingVideo,chunkSize=4*1024*1024,total=file.size;
- $("video-upload-status").textContent="Preparando carga por fragmentos a Google Drive…";
+ $("video-upload-status").textContent="Preparando carga directa a Google Drive…";
  const start=await post("uploadVideoStart",{id,titulo:title,fileName:file.name,mimeType:file.type||"video/mp4",totalSize:String(total)});
  let offset=0,last=null;
  while(offset<total){
    const end=Math.min(offset+chunkSize,total);
-   const data=await fileChunkData(file.slice(offset,end));
    $("video-upload-status").textContent="Subiendo a Google Drive: "+Math.round(end/total*100)+"%";
-   const result=await post("uploadVideoChunk",{id,sessionUrl:start.upload.sessionUrl,folderId:start.upload.folderId,folderName:start.upload.folderName,totalSize:String(total),start:String(offset),end:String(end),chunkData:data});
-   last=result.upload;
+   last=await directUploadChunk(start.upload.sessionUrl,file.slice(offset,end),offset,end,total);
    if(last.complete)break;
    offset=Number(last.nextStart||end);
  }
  if(!last||!last.complete)throw new Error("La carga del video no llegó a completarse.");
- pendingVideo=null;$("videoFile").value="";$("videoUrl").value=last.previewUrl;$("video-upload-status").textContent="Video guardado en Drive: "+last.folderName;
- return last;
+ const complete=await post("uploadVideoComplete",{id,fileId:last.fileId,folderId:start.upload.folderId,folderName:start.upload.folderName});
+ pendingVideo=null;$("videoFile").value="";$("videoUrl").value=complete.upload.previewUrl;$("video-upload-status").textContent="Video guardado en Drive: "+complete.upload.folderName;
+ return complete.upload;
 }
 window.editItem=id=>{const x=items.find(i=>i.id===id);if(x)fill(x)}
 window.togglePublish=async id=>{try{const x=items.find(i=>i.id===id),action=x.estado==="Publicado"?"unpublish":"publish";await post(action,{id});showNotice(action==="publish"?"Comunicado publicado":"Comunicado pasado a borrador");await load()}catch(e){showNotice("⚠ "+e.message,"error")}}
