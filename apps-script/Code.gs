@@ -41,6 +41,7 @@ function doPost(e){
     if(p.action==='save')return json_({ok:true,item:save_(p)});
     if(p.action==='uploadVideoStart')return json_({ok:true,upload:uploadVideoStart_(p)});
     if(p.action==='uploadVideoChunk')return json_({ok:true,upload:uploadVideoChunk_(p)});
+    if(p.action==='uploadVideoComplete')return json_({ok:true,upload:uploadVideoComplete_(p)});
     if(p.action==='uploadImages')return json_({ok:true,images:uploadImages_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
     if(p.action==='publish')return json_({ok:setStatus_(p.id,'Publicado'),item:findById_(p.id)});
@@ -90,6 +91,18 @@ function uploadVideoStart_(p){
   const location=headers.Location||headers.location;
   if(!location)throw new Error('Google Drive no devolvió la URL de carga reanudable.');
   return {sessionUrl:String(location),folderId:titleFolder.getId(),folderName:titleFolder.getName()};
+}
+function uploadVideoComplete_(p){
+  if(!p.id||!p.fileId)throw new Error('Faltan datos para finalizar la carga del video.');
+  const sh=getSheet_(),row=findRow_(sh,p.id);
+  if(row<0)throw new Error('No se encontró el comunicado para asociar el video.');
+  const file=DriveApp.getFileById(p.fileId);
+  try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
+  const fileUrl='https://drive.google.com/file/d/'+p.fileId+'/view';
+  const previewUrl='https://drive.google.com/file/d/'+p.fileId+'/preview';
+  sh.getRange(row,12,1,4).setValues([[p.fileId,fileUrl,p.folderId||'',formatDateTime_(new Date())]]);
+  sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  return {complete:true,fileId:p.fileId,fileUrl:fileUrl,previewUrl:previewUrl,folderId:p.folderId||'',folderName:p.folderName||'',name:file.getName()};
 }
 function uploadVideoChunk_(p){
   if(!p.sessionUrl)throw new Error('Falta la sesión de carga de Google Drive.');
