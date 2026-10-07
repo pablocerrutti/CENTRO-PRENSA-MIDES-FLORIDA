@@ -4,7 +4,7 @@ const CONFIG = {
   adminKey: 'CAMBIAR-ESTA-CLAVE'
 };
 
-const HEADERS = ['ID','Estado','Fecha','Categoria','Tag','Titulo','Resumen','Contenido','FechaCreacion','FechaActualizacion'];
+const HEADERS = ['ID','Estado','Fecha','Categoria','Tag','Titulo','Resumen','Contenido','FotoPrincipal','Fotos','VideoURL','FechaCreacion','FechaActualizacion'];
 
 function getSpreadsheet_() {
   return CONFIG.spreadsheetId ? SpreadsheetApp.openById(CONFIG.spreadsheetId) : SpreadsheetApp.getActiveSpreadsheet();
@@ -14,7 +14,13 @@ function getSheet_() {
   let sh=ss.getSheetByName(CONFIG.sheetName);
   if(!sh) sh=ss.insertSheet(CONFIG.sheetName);
   if(sh.getLastRow()===0) sh.appendRow(HEADERS);
+  ensureHeaders_(sh);
   return sh;
+}
+function ensureHeaders_(sh){
+  const last=sh.getLastColumn();
+  const current=last?sh.getRange(1,1,1,last).getValues()[0]:[];
+  HEADERS.forEach((h,i)=>{if(current[i]!==h)sh.getRange(1,i+1).setValue(h);});
 }
 function setup(){const sh=getSheet_();sh.getRange(1,1,1,HEADERS.length).setValues([HEADERS]);sh.setFrozenRows(1);return json_({ok:true,sheet:sh.getName(),headers:HEADERS});}
 function doGet(e){
@@ -41,12 +47,13 @@ function doPost(e){
 }
 function listPublished_(){return readAll_().filter(x=>x.estado==='Publicado').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));}
 function readAll_(){const v=getSheet_().getDataRange().getValues();return v.length<2?[]:v.slice(1).filter(r=>r[0]).map(rowToObject_);}
-function rowToObject_(r){return{id:String(r[0]),estado:String(r[1]),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fechaCreacion:formatDateTime_(r[8]),fechaActualizacion:formatDateTime_(r[9])};}
+function rowToObject_(r){return{id:String(r[0]),estado:String(r[1]),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),fechaCreacion:formatDateTime_(r[11]),fechaActualizacion:formatDateTime_(r[12])};}
+function splitPhotos_(v){return String(v||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);}
 function findById_(id){return id?readAll_().find(x=>x.id===String(id))||null:null;}
 function save_(p){
   const sh=getSheet_(),id=p.id||Utilities.getUuid(),now=new Date(),old=findById_(id);
-  const item={id:id,estado:old?old.estado:'Borrador',fecha:p.fecha||'',categoria:p.categoria||'Comunicado',tag:p.tag||'',titulo:p.titulo||'',resumen:p.resumen||'',contenido:p.contenido||'',fechaCreacion:old&&old.fechaCreacion?old.fechaCreacion:formatDateTime_(now),fechaActualizacion:formatDateTime_(now)};
-  const row=[item.id,item.estado,item.fecha,item.categoria,item.tag,item.titulo,item.resumen,item.contenido,item.fechaCreacion,item.fechaActualizacion];
+  const item={id:id,estado:old?old.estado:'Borrador',fecha:p.fecha||'',categoria:p.categoria||'Comunicado',tag:p.tag||'',titulo:p.titulo||'',resumen:p.resumen||'',contenido:p.contenido||'',fotoPrincipal:p.fotoPrincipal||'',fotos:splitPhotos_(p.fotos),videoUrl:p.videoUrl||'',fechaCreacion:old&&old.fechaCreacion?old.fechaCreacion:formatDateTime_(now),fechaActualizacion:formatDateTime_(now)};
+  const row=[item.id,item.estado,item.fecha,item.categoria,item.tag,item.titulo,item.resumen,item.contenido,item.fotoPrincipal,item.fotos.join('\n'),item.videoUrl,item.fechaCreacion,item.fechaActualizacion];
   const values=sh.getDataRange().getValues();let n=-1;
   for(let i=1;i<values.length;i++)if(String(values[i][0])===id){n=i+1;break;}
   if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,row.length).setValues([row]);
@@ -54,7 +61,7 @@ function save_(p){
 }
 function setStatus_(id,status){
   const sh=getSheet_(),v=sh.getDataRange().getValues();
-  for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,10).setValue(formatDateTime_(new Date()));return true;}
+  for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,13).setValue(formatDateTime_(new Date()));return true;}
   return false;
 }
 function delete_(id){
