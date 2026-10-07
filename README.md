@@ -22,12 +22,19 @@ La interfaz utiliza la marca oficial del MIDES y toma como referencia el Manual 
 
 Fuente oficial: https://www.gub.uy/ministerio-desarrollo-social/comunicacion/publicaciones/manual-identidad-visual-del-ministerio
 
+## Integración editorial actual
+
+- Google Sheets como fuente central de comunicados.
+- Google Apps Script como API web.
+- Panel editorial conectado para crear, editar, publicar, despublicar y eliminar.
+- Sala pública conectada para mostrar únicamente contenidos publicados.
+- Detalle individual de cada comunicado conectado a la API.
+- Guía de instalación en `apps-script/SETUP.md`.
+
 ## Próximas etapas
 
-1. Conectar Google Sheets como base de datos.
-2. Conectar Google Drive para multimedia.
-3. Crear editor completo de comunicados.
-4. Gestión de medios y listas.
-5. Envíos de mailing.
-6. Estadísticas.
-7. Autenticación y permisos.
+1. Conectar Google Drive para multimedia.
+2. Gestión de medios y listas.
+3. Envíos de mailing.
+4. Estadísticas.
+5. Autenticación institucional con usuarios autorizados.
