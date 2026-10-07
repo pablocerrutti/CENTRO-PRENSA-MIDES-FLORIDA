@@ -80,8 +80,7 @@ function uploadVideo_(p){
   if(!p.fileName||!p.fileData)throw new Error('No se recibió el archivo de video.');
   const data=String(p.fileData).replace(/^data:[^;]+;base64,/,'');
   const bytes=Utilities.base64Decode(data);
-  const max=30*1024*1024;
-  if(bytes.length>max)throw new Error('El video supera el límite de 30 MB para esta carga. Para videos más grandes implementaremos carga directa a Drive.');
+  // Sin límite de tamaño impuesto por nuestra lógica; Google Apps Script puede aplicar sus propios límites de solicitud/ejecución.
   const mime=p.mimeType||MimeType.MP4;
   const blob=Utilities.newBlob(bytes,mime,p.fileName);
   const root=getDriveRoot_();
