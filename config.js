@@ -1,0 +1,1 @@
+window.PRENSA_CONFIG={organization:"MIDES Florida",apiUrl:"",driveFolderId:"",mailProvider:""};
