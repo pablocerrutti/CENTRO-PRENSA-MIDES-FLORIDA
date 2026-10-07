@@ -31,7 +31,8 @@ function doPost(e){
     const p=e&&e.parameter?e.parameter:{};
     if(p.key!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
     if(p.action==='adminList')return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});
-    if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});\n    if(p.action==='save')return json_({ok:true,item:save_(p)});
+    if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});
+    if(p.action==='save')return json_({ok:true,item:save_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
     if(p.action==='publish')return json_({ok:setStatus_(p.id,'Publicado'),item:findById_(p.id)});
     if(p.action==='unpublish')return json_({ok:setStatus_(p.id,'Borrador'),item:findById_(p.id)});
