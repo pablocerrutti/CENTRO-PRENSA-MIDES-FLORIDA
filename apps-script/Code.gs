@@ -1,7 +1,7 @@
 const CONFIG = {
   spreadsheetId: '',
   sheetName: 'Comunicados',
-  adminKey: 'CAMBIAR-ESTA-CLAVE',
+  adminKey: 'Ik3r2026',
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
@@ -52,25 +52,13 @@ function doPost(e){
 function listPublished_(){return readAll_().filter(x=>x.estado==='Publicado').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));}
 function readAll_(){const v=getSheet_().getDataRange().getValues();return v.length<2?[]:v.slice(1).filter(r=>r[0]).map(rowToObject_);}
 function rowToObject_(r){
-  return {
-    id:String(r[0]),estado:String(r[1]),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),
-    titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),
-    fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),
-    videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),
-    fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15])
-  };
+  return {id:String(r[0]),estado:String(r[1]),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15])};
 }
 function splitPhotos_(v){return String(v||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);}
 function findById_(id){return id?readAll_().find(x=>x.id===String(id))||null:null;}
 function save_(p){
   const sh=getSheet_(),id=p.id||Utilities.getUuid(),now=new Date(),old=findById_(id);
-  const item={
-    id:id,estado:old?old.estado:'Borrador',fecha:p.fecha||'',categoria:p.categoria||'Comunicado',tag:p.tag||'',
-    titulo:p.titulo||'',resumen:p.resumen||'',contenido:p.contenido||'',fotoPrincipal:p.fotoPrincipal||'',
-    fotos:splitPhotos_(p.fotos),videoUrl:p.videoUrl||'',videoDriveFileId:old?.videoDriveFileId||'',
-    videoDriveUrl:old?.videoDriveUrl||'',videoDriveFolderId:old?.videoDriveFolderId||'',
-    fechaCreacion:old&&old.fechaCreacion?old.fechaCreacion:formatDateTime_(now),fechaActualizacion:formatDateTime_(now)
-  };
+  const item={id:id,estado:old?old.estado:'Borrador',fecha:p.fecha||'',categoria:p.categoria||'Comunicado',tag:p.tag||'',titulo:p.titulo||'',resumen:p.resumen||'',contenido:p.contenido||'',fotoPrincipal:p.fotoPrincipal||'',fotos:splitPhotos_(p.fotos),videoUrl:p.videoUrl||'',videoDriveFileId:old?.videoDriveFileId||'',videoDriveUrl:old?.videoDriveUrl||'',videoDriveFolderId:old?.videoDriveFolderId||'',fechaCreacion:old&&old.fechaCreacion?old.fechaCreacion:formatDateTime_(now),fechaActualizacion:formatDateTime_(now)};
   const row=[item.id,item.estado,item.fecha,item.categoria,item.tag,item.titulo,item.resumen,item.contenido,item.fotoPrincipal,item.fotos.join('\n'),item.videoUrl,item.videoDriveFileId,item.videoDriveUrl,item.videoDriveFolderId,item.fechaCreacion,item.fechaActualizacion];
   const values=sh.getDataRange().getValues();let n=-1;
   for(let i=1;i<values.length;i++)if(String(values[i][0])===id){n=i+1;break;}
@@ -81,11 +69,7 @@ function uploadVideoStart_(p){
   if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
   if(!p.fileName)throw new Error('No se recibió el nombre del video.');
   const root=getDriveRoot_(),titleFolder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id),mime=p.mimeType||'video/mp4';
-  const response=UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',{
-    method:'post',contentType:'application/json; charset=UTF-8',
-    headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken(),'X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(p.totalSize||0)},
-    payload:JSON.stringify({name:p.fileName,mimeType:mime,parents:[titleFolder.getId()]}),muteHttpExceptions:true,followRedirects:false
-  });
+  const response=UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable',{method:'post',contentType:'application/json; charset=UTF-8',headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken(),'X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(p.totalSize||0)},payload:JSON.stringify({name:p.fileName,mimeType:mime,parents:[titleFolder.getId()]}),muteHttpExceptions:true,followRedirects:false});
   const status=response.getResponseCode(),headers=response.getAllHeaders();
   if(status<200||status>=300)throw new Error('No se pudo iniciar la carga en Google Drive: HTTP '+status+' '+response.getContentText());
   const location=headers.Location||headers.location;
@@ -98,8 +82,7 @@ function uploadVideoComplete_(p){
   if(row<0)throw new Error('No se encontró el comunicado para asociar el video.');
   const file=DriveApp.getFileById(p.fileId);
   try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
-  const fileUrl='https://drive.google.com/file/d/'+p.fileId+'/view';
-  const previewUrl='https://drive.google.com/file/d/'+p.fileId+'/preview';
+  const fileUrl='https://drive.google.com/file/d/'+p.fileId+'/view',previewUrl='https://drive.google.com/file/d/'+p.fileId+'/preview';
   sh.getRange(row,12,1,4).setValues([[p.fileId,fileUrl,p.folderId||'',formatDateTime_(new Date())]]);
   sh.getRange(row,16).setValue(formatDateTime_(new Date()));
   return {complete:true,fileId:p.fileId,fileUrl:fileUrl,previewUrl:previewUrl,folderId:p.folderId||'',folderName:p.folderName||'',name:file.getName()};
@@ -113,10 +96,7 @@ function uploadVideoChunk_(p){
   const bytes=Utilities.base64Decode(data);
   const response=UrlFetchApp.fetch(p.sessionUrl,{method:'put',headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken(),'Content-Length':String(bytes.length),'Content-Range':'bytes '+start+'-'+(end-1)+'/'+total},payload:bytes,muteHttpExceptions:true,followRedirects:false});
   const status=response.getResponseCode();
-  if(status===308){
-    const h=response.getAllHeaders(),range=h.Range||h.range||'';
-    return {complete:false,nextStart:range?parseInt(String(range).split('-').pop(),10)+1:end};
-  }
+  if(status===308){const h=response.getAllHeaders(),range=h.Range||h.range||'';return {complete:false,nextStart:range?parseInt(String(range).split('-').pop(),10)+1:end};}
   if(status!==200&&status!==201)throw new Error('Google Drive rechazó el fragmento: HTTP '+status+' '+response.getContentText());
   const file=JSON.parse(response.getContentText());
   if(!file.id)throw new Error('Google Drive no devolvió el ID del archivo.');
@@ -132,39 +112,18 @@ function uploadImages_(p){
   if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
   if(!p.files)throw new Error('No se recibieron imágenes.');
   const files=JSON.parse(p.files),max=10*1024*1024,root=getDriveRoot_(),titleFolder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id),uploaded=[];
-  files.forEach(f=>{
-    const data=String(f.data||'').replace(/^data:[^;]+;base64,/,'');
-    const bytes=Utilities.base64Decode(data);
-    if(bytes.length>max)throw new Error('La imagen '+f.name+' supera el límite de 10 MB.');
-    const file=titleFolder.createFile(Utilities.newBlob(bytes,f.type||'image/jpeg',f.name));
-    try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
-    uploaded.push({id:file.getId(),name:file.getName(),url:file.getUrl(),directUrl:'https://drive.google.com/uc?export=view&id='+file.getId()});
-  });
-  const sh=getSheet_(),row=findRow_(sh,p.id);
-  if(row<0)throw new Error('No se encontró el comunicado para asociar las imágenes.');
-  const current=splitPhotos_(sh.getRange(row,10).getValue());
-  sh.getRange(row,10).setValue(current.concat(uploaded.map(x=>x.directUrl)).join('\n'));
-  sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  files.forEach(f=>{const data=String(f.data||'').replace(/^data:[^;]+;base64,/,'');const bytes=Utilities.base64Decode(data);if(bytes.length>max)throw new Error('La imagen '+f.name+' supera el límite de 10 MB.');const file=titleFolder.createFile(Utilities.newBlob(bytes,f.type||'image/jpeg',f.name));try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}uploaded.push({id:file.getId(),name:file.getName(),url:file.getUrl(),directUrl:'https://drive.google.com/uc?export=view&id='+file.getId()});});
+  const sh=getSheet_(),row=findRow_(sh,p.id);if(row<0)throw new Error('No se encontró el comunicado para asociar las imágenes.');
+  const current=splitPhotos_(sh.getRange(row,10).getValue());sh.getRange(row,10).setValue(current.concat(uploaded.map(x=>x.directUrl)).join('\n'));sh.getRange(row,16).setValue(formatDateTime_(new Date()));
   return {folderId:titleFolder.getId(),folderName:titleFolder.getName(),items:uploaded};
 }
 function getDriveRoot_(){return CONFIG.driveRootFolderId?DriveApp.getFolderById(CONFIG.driveRootFolderId):DriveApp.getRootFolder();}
 function getOrCreateFolder_(parent,name){const it=parent.getFoldersByName(name);return it.hasNext()?it.next():parent.createFolder(name);}
-function getOrCreateCommunicationFolder_(parent,title){
-  const name=String(title||'Comunicado').trim().slice(0,150)||'Comunicado';
-  return getOrCreateFolder_(parent,name);
-}
+function getOrCreateCommunicationFolder_(parent,title){return getOrCreateFolder_(parent,safeFolderName_(title));}
 function safeFolderName_(name){return String(name).replace(/[\\/:*?"<>|#%{}~&]/g,' ').replace(/\s+/g,' ').trim().slice(0,150)||'Comunicado';}
 function findRow_(sh,id){const v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id))return i+1;return -1;}
-function setStatus_(id,status){
-  const sh=getSheet_(),v=sh.getDataRange().getValues();
-  for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,16).setValue(formatDateTime_(new Date()));return true;}
-  return false;
-}
-function delete_(id){
-  const sh=getSheet_(),v=sh.getDataRange().getValues();
-  for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.deleteRow(i+1);return true;}
-  return false;
-}
+function setStatus_(id,status){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,16).setValue(formatDateTime_(new Date()));return true;}return false;}
+function delete_(id){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.deleteRow(i+1);return true;}return false;}
 function formatDate_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd');return String(v);}
 function formatDateTime_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');return String(v);}
 function json_(obj){return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);}
