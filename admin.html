@@ -21,7 +21,9 @@
   <div class="media-editor-title"><span class="eyebrow blue">MATERIAL MULTIMEDIA</span><h3>Fotos y video de la actividad</h3><p>Podés agregar una foto principal y varias fotos adicionales mediante enlaces. El video se carga directamente desde esta pantalla y se almacena en Google Drive, organizado por comunicado.</p></div>
   <div class="form-grid media-grid">
     <label class="full">Foto principal<input id="coverImage" type="url" placeholder="https://.../foto-principal.jpg"></label>
-    <label class="full">Fotos adicionales<textarea id="gallery" rows="4" placeholder="Una URL de imagen por línea&#10;https://.../foto-1.jpg&#10;https://.../foto-2.jpg"></textarea></label>
+    <label class="full">Seleccionar imágenes<input id="imageFiles" type="file" accept="image/*" multiple><small class="field-help">Podés seleccionar varias imágenes a la vez. Se guardarán en Google Drive dentro de <strong>Fotos / título del comunicado</strong>.</small></label>
+    <div class="upload-status full" id="image-upload-status">No hay imágenes nuevas seleccionadas.</div>
+    <label class="full">Fotos adicionales<textarea id="gallery" rows="4" placeholder="También podés pegar URLs de imágenes, una por línea."></textarea></label>
     <label class="full">Video relacionado<input id="videoFile" type="file" accept="video/*"><small class="field-help">El video se subirá a Google Drive dentro de <strong>Videos / título del comunicado</strong>. Límite actual: 30 MB.</small></label>
     <label class="full">Video guardado<input id="videoUrl" type="url" readonly placeholder="Se completará automáticamente al subir el video"></label>
     <div class="upload-status full" id="video-upload-status">No hay video nuevo seleccionado.</div>
@@ -40,7 +42,7 @@
 <div id="notice" class="toast" hidden></div>
 <script src="config.js"></script>
 <script>
-let editorKey="",items=[],pendingVideo=null;
+let editorKey="",items=[],pendingVideo=null,pendingImages=[];
 const $=id=>document.getElementById(id),today=new Date().toISOString().slice(0,10);
 $("date").value=today;
 function showNotice(t){const n=$("notice");n.textContent=t;n.hidden=false;setTimeout(()=>n.hidden=true,2800)}
@@ -62,9 +64,27 @@ function render(){
  if(!items.length){$("draft-list").innerHTML='<p class="empty-state">Todavía no hay comunicados cargados.</p>';return}
  $("draft-list").innerHTML=items.map(x=>'<article class="draft-item"><div><span class="draft-meta">'+esc(x.fecha)+' · '+esc(x.categoria)+' · '+esc(x.estado)+'</span><h3>'+esc(x.titulo)+'</h3><p>'+esc(x.resumen||"Sin resumen")+'</p></div><div class="draft-actions"><button type="button" onclick="editItem(\''+esc(x.id)+'\')">Editar</button><button type="button" class="secondary" onclick="togglePublish(\''+esc(x.id)+'\')">'+(x.estado==="Publicado"?"Despublicar":"Publicar")+'</button><button type="button" class="ghost" onclick="deleteItem(\''+esc(x.id)+'\')">Eliminar</button></div></article>').join("");
 }
-function reset(){pendingVideo=null;$("video-upload-status").textContent="No hay video nuevo seleccionado.";$("editor-form").reset();$("edit-id").value="";$("date").value=today;$("form-title").textContent="Nuevo comunicado";$("editor-status").textContent="Borrador"}
+function reset(){pendingVideo=null;pendingImages=[];$("image-upload-status").textContent="No hay imágenes nuevas seleccionadas.";$("video-upload-status").textContent="No hay video nuevo seleccionado.";$("editor-form").reset();$("edit-id").value="";$("date").value=today;$("form-title").textContent="Nuevo comunicado";$("editor-status").textContent="Borrador"}
 function fill(x){$("edit-id").value=x.id;$("title").value=x.titulo;$("date").value=x.fecha;$("category").value=x.categoria;$("tag").value=x.tag||"";$("summary").value=x.resumen||"";$("content").value=x.contenido||"";$("coverImage").value=x.fotoPrincipal||"";$("gallery").value=(x.fotos||[]).join("\n");$("videoUrl").value=x.videoDriveUrl||x.videoUrl||"";$("videoFile").value="";pendingVideo=null;$("video-upload-status").textContent=x.videoDriveFileId?"Video almacenado en Google Drive.":"No hay video almacenado.";$("form-title").textContent="Editar comunicado";$("editor-status").textContent=x.estado;window.scrollTo({top:0,behavior:"smooth"})}
 function mediaPayload(){return{fotoPrincipal:$("coverImage").value.trim(),fotos:$("gallery").value.split(/\n+/).map(x=>x.trim()).filter(Boolean).join("\n"),videoUrl:$("videoUrl").value.trim()}}
+$("imageFiles").addEventListener("change",e=>{pendingImages=[...e.target.files];$("image-upload-status").textContent=pendingImages.length?pendingImages.length+" imagen(es) seleccionada(s).":"No hay imágenes nuevas seleccionadas.";});
+async function uploadPendingImages(id,title){
+ if(!pendingImages.length)return null;
+ $("image-upload-status").textContent="Subiendo imágenes a Google Drive…";
+ const files=[];
+ for(const file of pendingImages){
+   if(file.size>10*1024*1024)throw new Error("La imagen "+file.name+" supera el límite de 10 MB.");
+   const reader=new FileReader();
+   const data=await new Promise((resolve,reject)=>{reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("No se pudo leer "+file.name));reader.readAsDataURL(file)});
+   files.push({name:file.name,type:file.type||"image/jpeg",data});
+ }
+ const result=await post("uploadImages",{id,titulo:title,files:JSON.stringify(files)});
+ pendingImages=[];$("imageFiles").value="";
+ const refreshed=(await post("adminGet",{id})).item;
+ $("gallery").value=(refreshed.fotos||[]).join("\n");
+ $("image-upload-status").textContent="Imágenes guardadas en Drive: "+result.images.folderName;
+ return result.images;
+}
 $("videoFile").addEventListener("change",e=>{pendingVideo=e.target.files[0]||null;$("video-upload-status").textContent=pendingVideo?"Video seleccionado: "+pendingVideo.name+" ("+(pendingVideo.size/1024/1024).toFixed(1)+" MB)":"No hay video nuevo seleccionado.";});
 async function uploadPendingVideo(id,title){
  if(!pendingVideo)return null;
@@ -80,8 +100,8 @@ window.editItem=id=>{const x=items.find(i=>i.id===id);if(x)fill(x)}
 window.togglePublish=async id=>{try{const x=items.find(i=>i.id===id),action=x.estado==="Publicado"?"unpublish":"publish";await post(action,{id});showNotice(action==="publish"?"Comunicado publicado":"Comunicado pasado a borrador");await load()}catch(e){showNotice(e.message)}}
 window.deleteItem=async id=>{if(!confirm("¿Eliminar este comunicado?"))return;try{await post("delete",{id});showNotice("Comunicado eliminado");reset();await load()}catch(e){showNotice(e.message)}}
 function payload(){return{id:$("edit-id").value,fecha:$("date").value,categoria:$("category").value,tag:$("tag").value.trim(),titulo:$("title").value.trim(),resumen:$("summary").value.trim(),contenido:$("content").value.trim(),...mediaPayload()}}
-$("editor-form").addEventListener("submit",async e=>{e.preventDefault();try{const data=await post("save",payload());await uploadPendingVideo(data.item.id,data.item.titulo);const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("Borrador guardado y multimedia actualizada");await load()}catch(err){showNotice(err.message)}})
-$("publish-btn").addEventListener("click",async()=>{try{const data=await post("save",payload());await uploadPendingVideo(data.item.id,data.item.titulo);await post("publish",{id:data.item.id});const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("Comunicado publicado");await load()}catch(err){showNotice(err.message)}})
+$("editor-form").addEventListener("submit",async e=>{e.preventDefault();try{const data=await post("save",payload());await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("Borrador guardado y multimedia actualizada");await load()}catch(err){showNotice(err.message)}})
+$("publish-btn").addEventListener("click",async()=>{try{const data=await post("save",payload());await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);await post("publish",{id:data.item.id});const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("Comunicado publicado");await load()}catch(err){showNotice(err.message)}})
 $("clear-btn").addEventListener("click",reset);
 load();
 </script></body></html>
