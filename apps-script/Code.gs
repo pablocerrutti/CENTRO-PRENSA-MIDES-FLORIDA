@@ -22,7 +22,7 @@ function doGet(e){
     const a=(e&&e.parameter&&e.parameter.action)||'list';
     if(a==='ping') return json_({ok:true,service:'Centro de Prensa MIDES Florida'});
     if(a==='list') return json_({ok:true,items:listPublished_()});
-    if(a==='get'){const item=findById_(e.parameter.id);return json_({ok:!!item,item:item||null});}
+    if(a==='get'){const item=findById_(e.parameter.id);const publicItem=item&&item.estado==='Publicado'?item:null;return json_({ok:!!publicItem,item:publicItem});}
     return json_({ok:false,error:'Acción GET no válida'});
   }catch(err){return json_({ok:false,error:String(err)});}
 }
@@ -30,7 +30,7 @@ function doPost(e){
   try{
     const p=e&&e.parameter?e.parameter:{};
     if(p.key!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
-    if(p.action==='save')return json_({ok:true,item:save_(p)});
+    if(p.action==='adminList')return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});\n    if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});\n    if(p.action==='save')return json_({ok:true,item:save_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
     if(p.action==='publish')return json_({ok:setStatus_(p.id,'Publicado'),item:findById_(p.id)});
     if(p.action==='unpublish')return json_({ok:setStatus_(p.id,'Borrador'),item:findById_(p.id)});
