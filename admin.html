@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panel editorial | Centro de Prensa</title><link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="admin-body">
+<header class="site-header">
+  <div class="brand-wrap">
+    <img class="brand-logo" src="https://www.gub.uy/ministerio-desarrollo-social/sites/ministerio-desarrollo-social/files/styles/documento/public/imagenes/publicaciones/logo_mides.png" alt="Ministerio de Desarrollo Social">
+    <div class="brand-divider"></div><div><strong>PANEL EDITORIAL</strong><span>MIDES Florida</span></div>
+  </div>
+  <a class="admin-link" href="index.html">Ver sala de prensa</a>
+</header>
+<main class="admin-main">
+  <section class="page-title"><p class="eyebrow">GESTIÓN</p><h1>Centro de Prensa</h1><p>Primera interfaz editorial. En la siguiente etapa conectaremos persistencia, multimedia y mailing.</p></section>
+  <div class="dashboard-grid">
+    <article class="dashboard-card"><span class="icon">01</span><h2>Comunicados</h2><p>Crear, editar, publicar y archivar comunicados.</p><button onclick="showNotice('Editor de comunicados: próxima etapa')">Nuevo comunicado</button></article>
+    <article class="dashboard-card"><span class="icon">02</span><h2>Multimedia</h2><p>Fotografías, videos y documentos asociados a cada actividad.</p><button onclick="showNotice('Biblioteca multimedia: próxima etapa')">Abrir biblioteca</button></article>
+    <article class="dashboard-card"><span class="icon">03</span><h2>Medios</h2><p>Agenda de contactos y grupos de distribución.</p><button onclick="showNotice('Gestión de medios: próxima etapa')">Gestionar medios</button></article>
+    <article class="dashboard-card"><span class="icon">04</span><h2>Mailing</h2><p>Preparar y enviar campañas a listas de prensa.</p><button onclick="showNotice('Mailing: próxima etapa')">Nueva campaña</button></article>
+  </div>
+  <section class="status-panel"><div><strong>Arquitectura</strong><span>GitHub Pages + Google Sheets + Google Drive</span></div><div><strong>Estado</strong><span class="status">Base visual instalada</span></div></section>
+</main>
+<div id="notice" class="toast" hidden></div>
+<script>function showNotice(t){const n=document.getElementById('notice');n.textContent=t;n.hidden=false;setTimeout(()=>n.hidden=true,2600)}</script>
+</body></html>
