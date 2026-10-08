@@ -64,7 +64,28 @@ function firstCol_(m,names){for(const n of names){const k=normalizeHeader_(n);if
 function contactSource_(){const sh=getSpreadsheet_().getSheetByName(CONTACT_SOURCE_SHEET);if(!sh||sh.getLastRow()<2)return {sheet:sh,rows:[],map:{}};return {sheet:sh,rows:sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues(),map:contactHeaderMap_(sh)};}
 function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?String(r[c]??'').trim():''};const nombre=val(['Nombre','First Name','Given Name']),apellido=val(['Apellido','Last Name','Family Name']),nombreCompleto=val(['NombreCompleto','Nombre completo','Name','Display Name'])||[nombre,apellido].filter(Boolean).join(' ');return {nombre,apellido,nombreCompleto,email:val(['Email','E-mail','Correo electrónico','Correo','Email 1 - Value','E-mail 1 - Value']),telefono:val(['Telefono','Teléfono','Phone','Mobile Phone','Phone 1 - Value']),medio:val(['Medio','Organization','Organización','Empresa','Company','Organization 1 - Name']),cargo:val(['Cargo','Title','Puesto','Organization 1 - Title']),localidad:val(['Localidad','Ciudad','City','Address 1 - City'])};}
 function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
-function readContacts_(){const sh=getSpreadsheet_().getSheetByName(CONTACTS_SHEET);if(!sh||sh.getLastRow()<2)return [];return sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).getValues().filter(r=>r[0]).map(contactRow_);}
+function readContacts_(){
+  const src=contactSource_();
+  if(!src.sheet||src.rows.length<2)return [];
+  const normalized=[];
+  const membershipsSheet=getSpreadsheet_().getSheetByName(MEMBERSHIPS_SHEET);
+  const listMap={};
+  if(membershipsSheet&&membershipsSheet.getLastRow()>1){
+    const mv=membershipsSheet.getRange(2,1,membershipsSheet.getLastRow()-1,MEMBERSHIP_HEADERS.length).getValues();
+    mv.forEach(r=>{const cid=String(r[0]||''),lid=String(r[1]||'');if(cid&&lid)(listMap[cid]||(listMap[cid]=[])).push(lid);});
+  }
+  const lists=listMailingLists_();
+  const namesById={};lists.forEach(l=>namesById[l.id]=l.nombre);
+  src.rows.slice(1).forEach((r,i)=>{
+    const o=sourceContact_(r,src.map);
+    if(!o.nombreCompleto&&!o.email&&!o.telefono)return;
+    const key=(o.email||'').toLowerCase().trim()||((o.telefono||'').replace(/\\D/g,'')?'tel-'+(o.telefono||'').replace(/\\D/g,''):'row-'+(i+2));
+    const id='C-'+Utilities.base64EncodeWebSafe(key).replace(/=+$/,'').slice(0,20);
+    const ids=listMap[id]||[];
+    normalized.push({id,nombre:o.nombre,apellido:o.apellido,nombreCompleto:o.nombreCompleto,medio:o.medio,cargo:o.cargo,email:o.email,telefono:o.telefono,localidad:o.localidad,listas:ids.map(x=>namesById[x]).filter(Boolean),estado:'Activo',observaciones:'',fechaActualizacion:formatDateTime_(new Date())});
+  });
+  return normalized;
+}
 function importContacts_(){
   const src=contactSource_();
   if(!src.sheet)throw new Error('No existe la hoja Contactos.');
@@ -144,10 +165,10 @@ function doPost(e){
     return json_({ok:false,error:'Acción POST no válida'});
   }catch(err){return json_({ok:false,error:String(err)});}
 }
-function listPublished_(){return readAll_().filter(x=>x.estado==='Publicado').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));}
+function listPublished_(){return readAll_().filter(x=>String(x.estado||'').trim().toLowerCase()==='publicado').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));}
 function readAll_(){const v=getSheet_().getDataRange().getValues();return v.length<2?[]:v.slice(1).filter(r=>r[0]).map(rowToObject_);}
 function rowToObject_(r){
-  return {id:String(r[0]),estado:String(r[1]),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15])};
+  return {id:String(r[0]),estado:String(r[1]||'').trim(),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15])};
 }
 function splitPhotos_(v){return String(v||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);}
 function findById_(id){if(!id)return null;const sh=getSheet_(),row=findRow_(sh,id);return row<0?null:rowToObject_(sh.getRange(row,1,1,HEADERS.length).getValues()[0]);}
