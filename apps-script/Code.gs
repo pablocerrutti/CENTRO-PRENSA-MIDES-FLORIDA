@@ -2,7 +2,7 @@ const CONFIG = {
   spreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   contactSpreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   sheetName: 'Comunicados',
-  adminKey: String.fromCharCode(73,107,51,114,50,48,50,54),
+  adminKeyHash: 'db53bd89937e9f02a479955637147321c18ce67f1247323fb0699ced91c671e6',
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
@@ -261,7 +261,7 @@ function doPost(e){
     if(p.action==='agendaSave'){const r=saveAgenda_(p);return json_({ok:true,...r});}
     if(p.action==='agendaUploadImage'){return json_({ok:true,image:uploadAgendaImage_(p)});}
     if(p.action==='agendaDeleteOwn'){const u=validateFuncionario_(p),sh=getAgendaSheet_(),rows=sh.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(p.id)&&String(rows[i][1])===u.id){sh.getRange(i+1,12).setValue('Inactiva');return json_({ok:true});}return json_({ok:false,error:'Actividad no encontrada'});}
-    if(p.key!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
+    if(sha256Hex_(p.key||'')!==CONFIG.adminKeyHash)return json_({ok:false,error:'Clave editorial incorrecta'});
     if(p.action==='adminList')return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});
     if(p.action==='funcionariosList')return json_({ok:true,items:listFuncionarios_()});
     if(p.action==='funcionarioSave')return json_({ok:true,item:saveFuncionario_(p)});
@@ -399,4 +399,5 @@ function saveAndPublish_(p){const item=save_(p);const sh=getSheet_(),row=findRow
 function delete_(id){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.deleteRow(i+1);return true;}return false;}
 function formatDate_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd');return String(v);}
 function formatDateTime_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');return String(v);}
+function sha256Hex_(value){const bytes=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(value||''),Utilities.Charset.UTF_8);return bytes.map(b=>{const n=b<0?b+256:b;return ('0'+n.toString(16)).slice(-2);}).join('');}
 function json_(obj){return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);}
