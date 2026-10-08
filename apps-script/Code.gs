@@ -201,8 +201,11 @@ function listFuncionarios_(){
 function findFuncionario_(id){return listFuncionarios_().find(x=>String(x.id)===String(id))||null;}
 function findFuncionarioByCredentials_(nombre,area,password){
  const n=normalizeText_(nombre),a=normalizeText_(area),p=String(password||'');
- const u=listFuncionarios_().find(x=>x.estado==='Activo'&&normalizeText_(x.nombre)===n&&normalizeText_(x.area)===a&&x.password===p)||null;
- if(u)try{const sh=ensureFuncionarioHeaders_(),rows=sh.getDataRange().getValues(),idx=rows.findIndex(r=>String(r[0])===u.id);if(idx>0)sh.getRange(idx+1,11).setValue(formatDateTime_(new Date()));}catch(_){}
+ const u=listFuncionarios_().find(x=>x.estado==='Activo'&&x.rol==='Funcionario'&&normalizeText_(x.nombre)===n&&normalizeText_(x.area)===a&&x.password===p)||null;
+ if(u)try{
+   const sh=ensureFuncionarioHeaders_(),rows=sh.getDataRange().getValues(),idx=rows.findIndex(r=>String(r[0])===u.id);
+   if(idx>0){sh.getRange(idx+1,11).setValue(formatDateTime_(new Date()));SpreadsheetApp.flush();}
+ }catch(_){}
  return u;
 }
 function generateTemporaryPassword_(){return 'MIDES-'+Utilities.getUuid().replace(/-/g,'').slice(0,8).toUpperCase();}
@@ -211,10 +214,16 @@ function saveFuncionario_(p){
  if(!nombre||!area)throw new Error('Nombre y área de trabajo son obligatorios.');
  if(provisional.length<8)throw new Error('La contraseña provisoria debe tener al menos 8 caracteres.');
  const sh=ensureFuncionarioHeaders_(),id=p.id||'F-'+Utilities.getUuid().slice(0,8).toUpperCase(),old=findFuncionario_(id),color=old?.color||areaColor_(area,id),now=formatDateTime_(new Date());
+ const rows=sh.getDataRange().getValues();
+ const duplicate=rows.slice(1).find(r=>String(r[0])!==String(id)&&String(r[6]||'')==='Activo'&&normalizeText_(r[1])===normalizeText_(nombre)&&normalizeText_(r[2])===normalizeText_(area));
+ if(duplicate)throw new Error('Ya existe un funcionario activo con ese nombre y área de trabajo.');
  const row=[id,nombre,area,provisional,'Funcionario',color,p.estado||old?.estado||'Activo',old?.fechaCreacion||now,old?.debeCambiarPassword===false?'NO':'SI',old?.fechaCambioPassword||'',old?.ultimoAcceso||''];
- const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
+ let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
  if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,FUNC_HEADERS.length).setValues([row]);
- SpreadsheetApp.flush();const verify=sh.getDataRange().getValues().find(r=>String(r[0])===id);if(!verify)throw new Error('Google Sheets no confirmó la escritura del usuario.');
+ SpreadsheetApp.flush();
+ const verify=sh.getDataRange().getValues().find(r=>String(r[0])===id);
+ if(!verify)throw new Error('Google Sheets no confirmó la escritura del usuario.');
+ for(let i=0;i<FUNC_HEADERS.length;i++)if(String(verify[i]??'')!==String(row[i]??''))throw new Error('Google Sheets confirmó la fila, pero no todos los campos guardados coinciden.');
  return funcionarioRow_(verify);
 }
 function changeFuncionarioPassword_(p){
@@ -289,7 +298,7 @@ function doPost(e){
     if(p.action==='agendaDeleteOwn'){const u=validateFuncionario_(p),sh=getAgendaSheet_(),rows=sh.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(p.id)&&String(rows[i][1])===u.id){sh.getRange(i+1,12).setValue('Inactiva');return json_({ok:true});}return json_({ok:false,error:'Actividad no encontrada'});}
     // Acceso editorial directo: únicamente la clave exacta Ik3r2026.
     if(String(p.key||'')!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
-    if(p.action==='adminList'){invalidateEditorialCache_();return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});}
+    if(p.action==='adminList'){return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});}
     if(p.action==='funcionariosList')return json_({ok:true,items:listFuncionarios_()});
     if(p.action==='funcionarioSave')return json_({ok:true,item:saveFuncionario_(p)});
     if(p.action==='funcionarioDelete')return json_({ok:true,item:deleteFuncionario_(p.id)});
