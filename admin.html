@@ -1,7 +1,9 @@
 <!doctype html>
 <html lang="es">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Panel editorial | Centro de Prensa</title><link rel="stylesheet" href="assets/css/style.css"><style>.action-status{margin-top:14px;padding:12px 14px;background:#eef5f9;border-left:4px solid var(--mides-blue);color:var(--mides-dark);font-size:13px;font-weight:700}.action-status.success{border-left-color:#2e8b57}.action-status.error{border-left-color:#c0392b;background:#fff0f0;color:#5b1f1f}.form-actions button:disabled{opacity:.65;cursor:wait}</style><style>
+<title>Panel editorial | Centro de Prensa</title><link rel="stylesheet" href="assets/css/style.css"><style>
+.editor-auth-screen{position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#005ca9,#003b70);display:flex;align-items:center;justify-content:center;padding:24px}.editor-auth-card{width:min(430px,100%);background:#fff;border-radius:14px;padding:30px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center}.editor-auth-card img{max-width:190px;margin-bottom:18px}.editor-auth-card h2{margin:0 0 8px;color:#17324d}.editor-auth-card p{color:#526575;margin:0 0 20px}.editor-auth-card label{display:block;text-align:left;font-weight:800;color:#17324d;font-size:13px;margin-bottom:8px}.editor-auth-card input{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #ccd7df;border-radius:7px;font-size:16px}.editor-auth-actions{display:flex;gap:10px;margin-top:16px}.editor-auth-actions button{flex:1}.editor-auth-error{display:none;margin-top:12px;color:#a22;background:#fff0f0;border-radius:6px;padding:9px;font-size:13px;font-weight:700}.editor-auth-screen.ok{display:none}
+.action-status{margin-top:14px;padding:12px 14px;background:#eef5f9;border-left:4px solid var(--mides-blue);color:var(--mides-dark);font-size:13px;font-weight:700}.action-status.success{border-left-color:#2e8b57}.action-status.error{border-left-color:#c0392b;background:#fff0f0;color:#5b1f1f}.form-actions button:disabled{opacity:.65;cursor:wait}</style><style>
 .admin-calendar-toolbar{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}.admin-calendar-toolbar strong{min-width:190px;text-align:center;font-size:18px;color:var(--mides-dark)}
 .admin-cal-head,.admin-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.admin-cal-head span{text-align:center;font-size:12px;font-weight:800;padding:8px;color:var(--mides-dark)}
 .admin-cal-day{min-height:125px;border:1px solid #dce3e7;border-radius:8px;background:#fff;padding:7px;overflow:hidden}.admin-cal-day.outside{background:#f5f7f8;opacity:.65}.admin-cal-date{font-weight:900;font-size:13px;margin-bottom:5px}
@@ -9,6 +11,7 @@
 .admin-activity-detail{margin-top:18px;padding:18px;border:1px solid #dce3e7;border-radius:10px;background:#f8fafb}.admin-detail-grid{display:grid;grid-template-columns:minmax(180px,280px) 1fr;gap:20px;align-items:start}.admin-detail-grid img{width:100%;max-height:260px;object-fit:cover;border-radius:8px}@media(max-width:800px){.admin-cal-day{min-height:100px}.admin-detail-grid{grid-template-columns:1fr}}
 </style></head>
 <body class="admin-body">
+<div id="editor-auth-screen" class="editor-auth-screen"><div class="editor-auth-card"><img src="https://www.gub.uy/ministerio-desarrollo-social/sites/ministerio-desarrollo-social/files/styles/documento/public/imagenes/publicaciones/logo_mides.png" alt="MIDES"><h2>Área editorial restringida</h2><p>Ingresá la clave de administrador para acceder al Centro de Prensa.</p><form id="editor-auth-form"><label for="editor-auth-password">Contraseña</label><input id="editor-auth-password" type="password" autocomplete="off" required autofocus><div class="editor-auth-actions"><button type="submit">Ingresar</button></div><div id="editor-auth-error" class="editor-auth-error"></div></form></div></div>
 <header class="site-header"><div class="brand-wrap"><img class="brand-logo" src="https://www.gub.uy/ministerio-desarrollo-social/sites/ministerio-desarrollo-social/files/styles/documento/public/imagenes/publicaciones/logo_mides.png" alt="Ministerio de Desarrollo Social"><div class="brand-divider"></div><div><strong>PANEL EDITORIAL</strong> <span>MIDES Florida</span></div></div><a class="admin-link" href="index.html">Ver sala de prensa</a></header>
 <main class="admin-main">
 <section class="page-title"><p class="eyebrow">GESTIÓN EDITORIAL</p><h1>Centro de Prensa</h1><p>Los contenidos se guardan en Google Sheets y los publicados aparecen automáticamente en la sala de prensa.</p></section>
@@ -86,12 +89,26 @@
 <script src="config.js"></script>
 <script>
 
-let editorKey="",items=[],pendingVideo=null,pendingImages=[],pendingAudio=null;
+let editorKey="",items=[],pendingVideo=null,pendingImages=[],pendingAudio=null,editorialAuthorized=false,editorialAuthPromise=null;
 const $=id=>document.getElementById(id),today=new Date().toISOString().slice(0,10);
 $("date").value=today;
 function showNotice(t,type="success"){const n=$("notice");n.textContent=t;n.className="toast "+type;n.hidden=false;clearTimeout(window.noticeTimer);window.noticeTimer=setTimeout(()=>n.hidden=true,6500);const s=$("action-status");if(s){s.textContent=t;s.className="action-status "+type}}
 function esc(v){return String(v??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
-function key(){if(editorKey)return editorKey;editorKey=prompt("Ingrese la clave editorial:")||"";return editorKey}
+function key(){return editorKey}
+async function authorizeEditorial(){
+  if(editorialAuthorized)return true;
+  const input=$("editor-auth-password"),screen=$("editor-auth-screen"),error=$("editor-auth-error");
+  const k=String(input?.value||"");
+  if(!k){if(error){error.textContent="Ingresá la contraseña.";error.style.display="block"}return false}
+  try{
+    const res=await fetch(window.PRENSA_CONFIG.apiUrl,{method:"POST",body:new URLSearchParams({action:"adminList",key:k})});
+    const raw=await res.text();let data;try{data=JSON.parse(raw)}catch(_){throw new Error("Respuesta no válida de la API.")}
+    if(!data.ok)throw new Error(data.error||"Clave editorial incorrecta.");
+    editorKey=k;editorialAuthorized=true;if(screen)screen.classList.add("ok");if(error)error.style.display="none";return true;
+  }catch(e){editorKey="";editorialAuthorized=false;if(error){error.textContent="⚠ "+e.message;error.style.display="block"}input?.focus();return false}
+}
+$("editor-auth-form").addEventListener("submit",async e=>{e.preventDefault();if(await authorizeEditorial()){load();loadContactsModule();loadMailingModule();loadFuncionarios();loadAdminAgenda();}});
+
 async function post(action,extra={}){
  const k=key();if(!k)throw new Error("No se ingresó la clave editorial");
  if(!window.PRENSA_CONFIG?.apiUrl)throw new Error("Falta configurar apiUrl en config.js");
@@ -150,8 +167,6 @@ function payload(){return{id:$("edit-id").value,fecha:$("date").value,categoria:
 $("editor-form").addEventListener("submit",async e=>{e.preventDefault();const btn=$("save-btn");try{btn.disabled=true;btn.textContent="Guardando…";showNotice("Guardando borrador en Google Sheets…","success");const data=await post("save",payload());await uploadPendingCover(data.item.id,data.item.titulo);await uploadPendingCover(data.item.id,data.item.titulo);await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);\n  await uploadPendingAudio(data.item.id,data.item.titulo);const refreshed=(await post("adminGet",{id:data.item.id})).item;if(!refreshed)throw new Error("La API no devolvió el comunicado guardado.");fill(refreshed);showNotice("✓ Borrador guardado correctamente en Google Sheets.","success");await load()}catch(err){showNotice("⚠ No se pudo guardar: "+err.message,"error")}finally{btn.disabled=false;btn.textContent="Guardar borrador"}})
 $("publish-btn").addEventListener("click",async()=>{const btn=$("publish-btn");try{btn.disabled=true;btn.textContent="Publicando…";showNotice("Guardando contenido…","success");const hadMedia=pendingImages.length>0||!!pendingVideo||!!pendingAudio;let data;if(hadMedia){data=await post("save",payload());if(!data.item)throw new Error("La API no devolvió el comunicado guardado.");await uploadPendingImages(data.item.id,data.item.titulo);await uploadPendingVideo(data.item.id,data.item.titulo);await uploadPendingAudio(data.item.id,data.item.titulo);const mediaReady=(await post("adminGet",{id:data.item.id})).item;if(!mediaReady)throw new Error("No se pudo verificar el contenido multimedia en Drive.");data=await post("publish",{id:data.item.id});}else{data=await post("savePublish",payload())}if(!data.item)throw new Error("La API no devolvió el comunicado publicado.");const refreshed=(await post("adminGet",{id:data.item.id})).item;fill(refreshed);showNotice("✓ Comunicado publicado correctamente en la sala de prensa.","success");await load()}catch(err){showNotice("⚠ No se pudo publicar: "+err.message,"error")}finally{btn.disabled=false;btn.textContent="Publicar"}})
 $("clear-btn").addEventListener("click",reset);
-load();
-
 let contacts=[],mailLists=[],selectedContactIds=new Set(),publishedForMailing=[];
 async function loadContactsModule(){try{const r=await post("contactsList");contacts=r.items||[];selectedContactIds=new Set([...selectedContactIds].filter(id=>contacts.some(c=>c.id===id)));renderContacts()}catch(e){$("contacts-list").innerHTML='<p class="empty-state">⚠ No se pudo leer la columna S de Contactos: '+esc(e.message)+'</p>'}}
 function renderContacts(){$("contacts-count").textContent=contacts.length+" contactos";$("contacts-selected").textContent=selectedContactIds.size+" seleccionados";$("contacts-list").innerHTML=contacts.length?contacts.map(c=>'<article class="contact-row"><label class="contact-select"><input type="checkbox" data-contact-id="'+esc(c.id)+'"'+(selectedContactIds.has(c.id)?" checked":"")+'> <span>Seleccionar</span></label><div class="contact-data"><div class="contact-field"><span>Columna S</span><strong>'+esc(c.email)+'</strong></div>'+(c.listas.length?'<div class="contact-memberships">Listas: '+c.listas.map(esc).join(" · ")+'</div>':"")+'</div></article>').join(""):'<p class="empty-state">No hay datos en la columna S.</p>';document.querySelectorAll("#contacts-list input[data-contact-id]").forEach(cb=>cb.onchange=()=>{if(cb.checked)selectedContactIds.add(cb.dataset.contactId);else selectedContactIds.delete(cb.dataset.contactId);$("contacts-selected").textContent=selectedContactIds.size+" seleccionados"})}
@@ -170,14 +185,11 @@ async function generateMailing(){const ids=selectedListIds(),articles=selectedAr
 $("save-campaign-btn").onclick=async()=>{try{await generateMailing();showNotice("✓ Mailing institucional generado.","success")}catch(e){showNotice("⚠ "+e.message,"error")}};
 $("send-mailing-btn").onclick=async()=>{try{const item=await generateMailing();if(!confirm("¿Enviar ahora el mailing a "+item.destinatarios+" destinatarios?"))return;const sent=await post("mailingSend",{id:item.id});showNotice("✓ Mailing enviado: "+sent.result.sent+" destinatarios.","success")}catch(e){showNotice("⚠ No se pudo enviar: "+e.message,"error")}};
 $("new-list-btn").onclick=()=>{$("list-id").value="";$("list-name").value="";$("list-description").value="";$("list-modal").hidden=false};
-loadContactsModule();loadMailingModule();
 let funcionarios=[];
 async function loadFuncionarios(){try{const r=await post("funcionariosList");funcionarios=r.items||[];renderFuncionarios()}catch(e){$("func-list").innerHTML='<p class="empty-state">⚠ '+esc(e.message)+'</p>'}}
 function renderFuncionarios(){$("func-count").textContent=funcionarios.filter(x=>x.estado==="Activo").length+" activos";$("func-list").innerHTML=funcionarios.length?funcionarios.map(x=>'<article class="draft-item"><div><span class="draft-meta">'+esc(x.rol)+' · '+esc(x.area)+'</span><h3>'+esc(x.nombre)+'</h3><p><strong>Clave:</strong> '+esc(x.password)+' · <span style="color:'+esc(x.color)+'">●</span> color de área</p></div><div class="draft-actions"><button type="button" class="ghost" onclick="deleteFuncionario(\''+esc(x.id)+'\')">'+(x.estado==="Activo"?"Desactivar":"Inactivo")+'</button></div></article>').join(""):'<p class="empty-state">No hay funcionarios registrados.</p>'}
 $("func-add").onclick=async()=>{try{const nombre=$("func-name").value.trim(),area=$("func-area").value.trim(),rol=$("func-role").value;if(!nombre||!area)throw new Error("Completá nombre y área.");const r=await post("funcionarioSave",{nombre,area,rol});$("func-name").value="";$("func-area").value="";showNotice("✓ Funcionario creado. Clave generada: "+r.item.password,"success");await loadFuncionarios()}catch(e){showNotice("⚠ "+e.message,"error")}};
 window.deleteFuncionario=async id=>{if(!confirm("¿Desactivar este funcionario?"))return;try{await post("funcionarioDelete",{id});showNotice("✓ Funcionario desactivado.","success");await loadFuncionarios()}catch(e){showNotice("⚠ "+e.message,"error")}};
-loadFuncionarios();
-
 let adminAgendaDate=new Date(),adminAgendaItems=[];
 function monthBounds(d){const y=d.getFullYear(),m=d.getMonth();return {from:new Date(y,m,1,0,0,0),to:new Date(y,m+1,0,23,59,59)}}
 function isoLocal(d){const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
@@ -192,6 +204,6 @@ function renderAdminCalendar(){
 }
 async function loadAdminAgenda(){try{const b=monthBounds(adminAgendaDate),r=await post("adminAgendaList",{from:isoLocal(b.from),to:isoLocal(b.to)});adminAgendaItems=r.items||[];renderAdminCalendar()}catch(e){$("admin-calendar").innerHTML='<p class="empty-state">⚠ No se pudo cargar la agenda: '+esc(e.message)+'</p>';showNotice("⚠ "+e.message,"error")}}
 window.showAdminActivity=id=>{const x=adminAgendaItems.find(a=>a.id===id);if(!x)return;const detail=$("admin-activity-detail");detail.hidden=false;detail.innerHTML='<div class="section-heading"><div><p class="eyebrow blue">DETALLE DE COBERTURA</p><h3>'+esc(x.actividad)+'</h3></div><button type="button" class="ghost" onclick="$('admin-activity-detail').hidden=true">Cerrar</button></div><div class="admin-detail-grid">'+(x.imagenUrl?'<img src="'+esc(x.imagenUrl)+'" alt="Imagen de '+esc(x.actividad)+'">':"")+'<div><p><strong>Área:</strong> <span style="color:'+esc(x.color)+'">●</span> '+esc(x.area)+'</p><p><strong>Propuesto por:</strong> '+esc(x.nombreUsuario)+'</p><p><strong>Horario:</strong> '+esc(new Date(x.inicio).toLocaleString("es-UY"))+' a '+esc(adminTime(x.fin))+'</p><p><strong>Lugar:</strong> '+esc(x.lugar)+'</p><p><strong>Descripción:</strong> '+esc(x.descripcion||"Sin información complementaria.")+'</p></div></div>';detail.scrollIntoView({behavior:"smooth",block:"center"})};
-$("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()-1,1);loadAdminAgenda()};$("admin-next-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()+1,1);loadAdminAgenda()};$("admin-today").onclick=()=>{adminAgendaDate=new Date();loadAdminAgenda()};loadAdminAgenda();
+$("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()-1,1);loadAdminAgenda()};$("admin-next-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()+1,1);loadAdminAgenda()};$("admin-today").onclick=()=>{adminAgendaDate=new Date();loadAdminAgenda()};
 </script>
 </body>
