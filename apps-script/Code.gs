@@ -8,6 +8,12 @@ const CONFIG = {
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
+const HEADERS = ['ID','Estado','Fecha','Categoria','Tag','Titulo','Resumen','Contenido','FotoPrincipal','Fotos','VideoURL','VideoDriveFileId','VideoDriveUrl','VideoDriveFolderId','FechaCreacion','FechaActualizacion','AudioURL','AudioDriveFileId','AudioDriveUrl'];
+
+function getSpreadsheet_() {
+  return CONFIG.spreadsheetId ? SpreadsheetApp.openById(CONFIG.spreadsheetId) : SpreadsheetApp.getActiveSpreadsheet();
+}
+
 function getSheet_() {
   const ss=getSpreadsheet_();
   let sh=ss.getSheetByName(CONFIG.sheetName);
