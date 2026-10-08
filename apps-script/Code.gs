@@ -93,7 +93,13 @@ function syncContactsNormalized_(){
  if(out.length)sh.getRange(2,1,out.length,CONTACT_HEADERS.length).setValues(out);
  SpreadsheetApp.flush();return {imported:out.length,sourceRows:Math.max(0,src.rows.length-1)};
 }
-function readContacts_(){syncContactsNormalized_();const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS);if(sh.getLastRow()<2)return [];return sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).getValues().filter(r=>r[0]).map(contactRow_);}
+function readContacts_(){
+ syncContactsNormalized_();
+ const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS);if(sh.getLastRow()<2)return [];
+ const listNames={};listMailingLists_().forEach(x=>listNames[x.id]=x.nombre);
+ const memberships={};const ms=getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS);if(ms.getLastRow()>1)ms.getRange(2,1,ms.getLastRow()-1,3).getValues().forEach(r=>{if(r[0]&&r[1])(memberships[String(r[0])]||(memberships[String(r[0])]=[])).push(listNames[String(r[1])]||String(r[1]));});
+ return sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).getValues().filter(r=>r[0]).map(r=>{const x=contactRow_(r);x.listas=memberships[x.id]||[];return x;});
+}
 function importContacts_(){return syncContactsNormalized_();}
 function listContacts_(){ensureContactsStructure_();return readContacts_();}
 function saveContact_(p){const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),id=p.id||'C-'+Utilities.getUuid().slice(0,8),old=readContacts_().find(x=>x.id===id),item=[id,p.nombre||'',p.apellido||'',p.nombreCompleto||[p.nombre,p.apellido].filter(Boolean).join(' '),p.medio||'',p.cargo||'',p.email||'',p.telefono||'',p.localidad||'',p.listas||'',p.estado||old?.estado||'Activo',p.observaciones||old?.observaciones||'',formatDateTime_(new Date())];const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}if(n<0)sh.appendRow(item);else sh.getRange(n,1,1,CONTACT_HEADERS.length).setValues([item]);return contactRow_(item);}
