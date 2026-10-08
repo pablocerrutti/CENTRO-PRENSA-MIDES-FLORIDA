@@ -73,7 +73,16 @@ const CAMPAIGN_HEADERS=['ID','Fecha','Asunto','ComunicadoID','ListaIDs','Destina
 const MAILING_HEADERS=['ID','Fecha','Asunto','ListaIDs','ComunicadoIDs','Destinatarios','Estado','PublicUrl','WhatsAppUrl'];
 const CONTACT_SOURCE_SHEET='Contactos', CONTACTS_SHEET='Contactos_Normalizados', LISTS_SHEET='ListasMailing', MEMBERSHIPS_SHEET='Contactos_Listas', CAMPAIGNS_SHEET='Mailing_Campañas';
 function ensureContactsStructure_(){ensureLists_();getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS);getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS);}
-function getNamedSheet_(name,headers){const ss=getSpreadsheet_();let sh=ss.getSheetByName(name);if(!sh)sh=ss.insertSheet(name);if(sh.getLastRow()===0)sh.appendRow(headers);ensureHeaders_(sh,headers);sh.setFrozenRows(1);return sh;}
+function getNamedSheet_(name,headers){
+ const ss=getSpreadsheet_();let sh=ss.getSheetByName(name);if(!sh)sh=ss.insertSheet(name);
+ if(sh.getLastRow()===0)sh.appendRow(headers);ensureHeaders_(sh,headers);sh.setFrozenRows(1);
+ if(sh.getLastColumn()>=headers.length){const h=sh.getRange(1,1,1,headers.length);h.setFontWeight('bold').setBackground('#005ca9').setFontColor('#ffffff');}
+ return sh;
+}
+function diagnosticoHojasCentroPrensa_(){
+ const ss=getSpreadsheet_(),keep=[CONFIG.sheetName,CONTACT_SOURCE_SHEET,CONTACTS_SHEET,LISTS_SHEET,MEMBERSHIPS_SHEET,CAMPAIGNS_SHEET,'Mailings',FUNC_SHEET,AGENDA_SHEET];
+ return ss.getSheets().map(sh=>({nombre:sh.getName(),filas:sh.getLastRow(),columnas:sh.getLastColumn(),oficial:keep.includes(sh.getName()),vacia:sh.getLastRow()<=1}));
+}
 function normalizeHeader_(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');}
 function contactHeaderMap_(sh){const h=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0],m={};h.forEach((x,i)=>m[normalizeHeader_(x)]=i);return m;}
 function firstCol_(m,names){for(const n of names){const k=normalizeHeader_(n);if(m[k]!==undefined)return m[k];}return -1;}
