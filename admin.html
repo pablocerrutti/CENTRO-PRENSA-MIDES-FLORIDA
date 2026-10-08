@@ -1,7 +1,13 @@
 <!doctype html>
 <html lang="es">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Panel editorial | Centro de Prensa</title><link rel="stylesheet" href="assets/css/style.css"><style>.action-status{margin-top:14px;padding:12px 14px;background:#eef5f9;border-left:4px solid var(--mides-blue);color:var(--mides-dark);font-size:13px;font-weight:700}.action-status.success{border-left-color:#2e8b57}.action-status.error{border-left-color:#c0392b;background:#fff0f0;color:#5b1f1f}.form-actions button:disabled{opacity:.65;cursor:wait}</style></head>
+<title>Panel editorial | Centro de Prensa</title><link rel="stylesheet" href="assets/css/style.css"><style>.action-status{margin-top:14px;padding:12px 14px;background:#eef5f9;border-left:4px solid var(--mides-blue);color:var(--mides-dark);font-size:13px;font-weight:700}.action-status.success{border-left-color:#2e8b57}.action-status.error{border-left-color:#c0392b;background:#fff0f0;color:#5b1f1f}.form-actions button:disabled{opacity:.65;cursor:wait}</style><style>
+.admin-calendar-toolbar{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}.admin-calendar-toolbar strong{min-width:190px;text-align:center;font-size:18px;color:var(--mides-dark)}
+.admin-cal-head,.admin-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.admin-cal-head span{text-align:center;font-size:12px;font-weight:800;padding:8px;color:var(--mides-dark)}
+.admin-cal-day{min-height:125px;border:1px solid #dce3e7;border-radius:8px;background:#fff;padding:7px;overflow:hidden}.admin-cal-day.outside{background:#f5f7f8;opacity:.65}.admin-cal-date{font-weight:900;font-size:13px;margin-bottom:5px}
+.admin-cal-event{display:block;width:100%;text-align:left;border:0;border-left:5px solid var(--mides-blue);background:#f4f7fa;border-radius:5px;padding:6px;margin:4px 0;cursor:pointer}.admin-cal-event strong,.admin-cal-event span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-cal-event strong{font-size:11px}.admin-cal-event span{font-size:10px;margin-top:2px}
+.admin-activity-detail{margin-top:18px;padding:18px;border:1px solid #dce3e7;border-radius:10px;background:#f8fafb}.admin-detail-grid{display:grid;grid-template-columns:minmax(180px,280px) 1fr;gap:20px;align-items:start}.admin-detail-grid img{width:100%;max-height:260px;object-fit:cover;border-radius:8px}@media(max-width:800px){.admin-cal-day{min-height:100px}.admin-detail-grid{grid-template-columns:1fr}}
+</style></head>
 <body class="admin-body">
 <header class="site-header"><div class="brand-wrap"><img class="brand-logo" src="https://www.gub.uy/ministerio-desarrollo-social/sites/ministerio-desarrollo-social/files/styles/documento/public/imagenes/publicaciones/logo_mides.png" alt="Ministerio de Desarrollo Social"><div class="brand-divider"></div><div><strong>PANEL EDITORIAL</strong> <span>MIDES Florida</span></div></div><a class="admin-link" href="index.html">Ver sala de prensa</a></header>
 <main class="admin-main">
@@ -36,6 +42,12 @@
 <article class="dashboard-card"><span class="icon">03</span><h2>Medios</h2><p>Agenda de contactos y grupos de distribución.</p><button type="button" onclick="showNotice('Gestión de medios: siguiente módulo')">Gestionar medios</button></article>
 <article class="dashboard-card"><span class="icon">04</span><h2>Mailing</h2><p>Preparar y enviar campañas a listas de prensa.</p><button type="button" onclick="showNotice('Mailing: siguiente módulo')">Nueva campaña</button></article><article class="dashboard-card"><span class="icon">05</span><h2>Agenda de funcionarios</h2><p>Calendario compartido para coordinar actividades y coberturas de prensa.</p><a class="button button-light" style="background:var(--mides-blue);color:#fff" href="funcionarios.html">Abrir agenda</a></article>
 </div>
+<section class="editor-card" id="admin-agenda-module">
+<div class="section-heading"><div><p class="eyebrow">COORDINACIÓN DE COBERTURA</p><h2>Agenda de actividades</h2><p class="module-help">Vista exclusiva del administrador. Incluye todas las actividades propuestas por los funcionarios, con horario, área, lugar, descripción e imagen.</p></div><span id="admin-agenda-count" class="status">0 actividades</span></div>
+<div class="admin-calendar-toolbar"><button type="button" class="secondary" id="admin-prev-month">‹ Mes anterior</button><strong id="admin-month-label"></strong><button type="button" class="secondary" id="admin-next-month">Mes siguiente ›</button><button type="button" id="admin-today">Hoy</button></div>
+<div id="admin-calendar" class="admin-calendar"><p class="empty-state">Cargando agenda…</p></div>
+<div id="admin-activity-detail" class="admin-activity-detail" hidden></div>
+</section>
 <section class="status-panel"><div><strong>Base editorial</strong><span>Google Sheets + Apps Script</span></div><div><strong>Estado</strong><span id="api-status" class="status">Configurando API</span></div><div><strong>Agenda</strong><a href="funcionarios.html" style="display:inline-block;margin-top:5px;color:var(--mides-blue);font-weight:800;text-decoration:none">Abrir agenda</a></div></section>
 
 <section class="editor-card" id="contactos-module">
@@ -165,5 +177,21 @@ function renderFuncionarios(){$("func-count").textContent=funcionarios.filter(x=
 $("func-add").onclick=async()=>{try{const nombre=$("func-name").value.trim(),area=$("func-area").value.trim(),rol=$("func-role").value;if(!nombre||!area)throw new Error("Completá nombre y área.");const r=await post("funcionarioSave",{nombre,area,rol});$("func-name").value="";$("func-area").value="";showNotice("✓ Funcionario creado. Clave generada: "+r.item.password,"success");await loadFuncionarios()}catch(e){showNotice("⚠ "+e.message,"error")}};
 window.deleteFuncionario=async id=>{if(!confirm("¿Desactivar este funcionario?"))return;try{await post("funcionarioDelete",{id});showNotice("✓ Funcionario desactivado.","success");await loadFuncionarios()}catch(e){showNotice("⚠ "+e.message,"error")}};
 loadFuncionarios();
+
+let adminAgendaDate=new Date(),adminAgendaItems=[];
+function monthBounds(d){const y=d.getFullYear(),m=d.getMonth();return {from:new Date(y,m,1,0,0,0),to:new Date(y,m+1,0,23,59,59)}}
+function isoLocal(d){const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
+function adminMonthName(d){return d.toLocaleDateString("es-UY",{month:"long",year:"numeric"}).replace(/^./,x=>x.toUpperCase())}
+function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()}
+function adminTime(v){const d=new Date(v);return isNaN(d)?String(v||""):d.toLocaleTimeString("es-UY",{hour:"2-digit",minute:"2-digit"})}
+function renderAdminCalendar(){
+ const d=adminAgendaDate,first=new Date(d.getFullYear(),d.getMonth(),1),start=new Date(first);start.setDate(first.getDate()-((first.getDay()+6)%7));
+ const cells=[];
+ for(let i=0;i<42;i++){const day=new Date(start);day.setDate(start.getDate()+i);const dayItems=adminAgendaItems.filter(x=>sameDay(new Date(x.inicio),day));cells.push('<div class="admin-cal-day '+(day.getMonth()!==d.getMonth()?"outside":"")+'"><div class="admin-cal-date">'+day.getDate()+'</div>'+dayItems.map(x=>'<button type="button" class="admin-cal-event" style="border-left-color:'+esc(x.color)+'" onclick="showAdminActivity(\\''+esc(x.id)+'\\')"><strong>'+esc(adminTime(x.inicio))+' · '+esc(x.actividad)+'</strong><span>'+esc(x.area)+' · '+esc(x.lugar)+'</span></button>').join("")+'</div>')}
+ $("admin-month-label").textContent=adminMonthName(d);$("admin-calendar").innerHTML='<div class="admin-cal-head">'+["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map(x=>"<span>"+x+"</span>").join("")+'</div><div class="admin-cal-grid">'+cells.join("")+'</div>';$("admin-agenda-count").textContent=adminAgendaItems.length+" "+(adminAgendaItems.length===1?"actividad":"actividades");
+}
+async function loadAdminAgenda(){try{const b=monthBounds(adminAgendaDate),r=await post("adminAgendaList",{from:isoLocal(b.from),to:isoLocal(b.to)});adminAgendaItems=r.items||[];renderAdminCalendar()}catch(e){$("admin-calendar").innerHTML='<p class="empty-state">⚠ No se pudo cargar la agenda: '+esc(e.message)+'</p>';showNotice("⚠ "+e.message,"error")}}
+window.showAdminActivity=id=>{const x=adminAgendaItems.find(a=>a.id===id);if(!x)return;const detail=$("admin-activity-detail");detail.hidden=false;detail.innerHTML='<div class="section-heading"><div><p class="eyebrow blue">DETALLE DE COBERTURA</p><h3>'+esc(x.actividad)+'</h3></div><button type="button" class="ghost" onclick="$('admin-activity-detail').hidden=true">Cerrar</button></div><div class="admin-detail-grid">'+(x.imagenUrl?'<img src="'+esc(x.imagenUrl)+'" alt="Imagen de '+esc(x.actividad)+'">':"")+'<div><p><strong>Área:</strong> <span style="color:'+esc(x.color)+'">●</span> '+esc(x.area)+'</p><p><strong>Propuesto por:</strong> '+esc(x.nombreUsuario)+'</p><p><strong>Horario:</strong> '+esc(new Date(x.inicio).toLocaleString("es-UY"))+' a '+esc(adminTime(x.fin))+'</p><p><strong>Lugar:</strong> '+esc(x.lugar)+'</p><p><strong>Descripción:</strong> '+esc(x.descripcion||"Sin información complementaria.")+'</p></div></div>';detail.scrollIntoView({behavior:"smooth",block:"center"})};
+$("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()-1,1);loadAdminAgenda()};$("admin-next-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()+1,1);loadAdminAgenda()};$("admin-today").onclick=()=>{adminAgendaDate=new Date();loadAdminAgenda()};loadAdminAgenda();
 </script>
 </body>
