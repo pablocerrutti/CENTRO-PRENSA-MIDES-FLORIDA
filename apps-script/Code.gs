@@ -23,6 +23,24 @@ function ensureHeaders_(sh,headers){
   const current=sh.getLastColumn()?sh.getRange(1,1,1,Math.max(sh.getLastColumn(),headers.length)).getValues()[0]:[];
   headers.forEach((h,i)=>{if(current[i]!==h)sh.getRange(1,i+1).setValue(h);});
 }
+function autorizarCentroPrensa(){
+  // Ejecutar manualmente una vez desde el editor de Apps Script con la cuenta propietaria.
+  // Esto fuerza la solicitud de permisos de Sheets + Drive antes de usar el Web App.
+  const ss=getSpreadsheet_();
+  if(!ss)throw new Error('No se pudo acceder a la hoja de cálculo.');
+  const root=getDriveRoot_();
+  root.getName();
+  if(CONFIG.driveRootFolderId){
+    const folder=DriveApp.getFolderById(CONFIG.driveRootFolderId);
+    folder.getName();
+  }
+  UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/about?fields=user',{
+    headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},
+    muteHttpExceptions:true
+  });
+  return 'Autorización de Google Sheets, Drive y solicitudes externas completada correctamente.';
+}
+
 function setup(){const sh=getSheet_();sh.getRange(1,1,1,HEADERS.length).setValues([HEADERS]);sh.setFrozenRows(1);return json_({ok:true,sheet:sh.getName(),headers:HEADERS});}
 function doGet(e){
   try{
