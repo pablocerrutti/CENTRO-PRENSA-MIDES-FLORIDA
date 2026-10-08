@@ -5,7 +5,7 @@ const CONFIG = {
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
-const HEADERS = ['ID','Estado','Fecha','Categoria','Tag','Titulo','Resumen','Contenido','FotoPrincipal','Fotos','VideoURL','VideoDriveFileId','VideoDriveUrl','VideoDriveFolderId','FechaCreacion','FechaActualizacion'];
+const HEADERS = ['ID','Estado','Fecha','Categoria','Tag','Titulo','Resumen','Contenido','FotoPrincipal','Fotos','VideoURL','VideoDriveFileId','VideoDriveUrl','VideoDriveFolderId','FechaCreacion','FechaActualizacion','AudioURL','AudioDriveFileId','AudioDriveUrl'];
 
 function getSpreadsheet_() {
   return CONFIG.spreadsheetId ? SpreadsheetApp.openById(CONFIG.spreadsheetId) : SpreadsheetApp.getActiveSpreadsheet();
@@ -57,6 +57,7 @@ const LIST_HEADERS=['ID','Nombre','Descripcion','Estado','FechaCreacion','FechaA
 const MEMBERSHIP_HEADERS=['ContactoID','ListaID','FechaAsignacion'];
 const CAMPAIGN_HEADERS=['ID','Fecha','Asunto','ComunicadoID','ListaIDs','Destinatarios','Estado','Notas'];
 const CONTACT_SOURCE_SHEET='Contactos', CONTACTS_SHEET='Contactos_Normalizados', LISTS_SHEET='ListasMailing', MEMBERSHIPS_SHEET='Contactos_Listas', CAMPAIGNS_SHEET='Mailing_Campañas';
+function ensureContactsStructure_(){ensureLists_();getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS);getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS);}
 function getNamedSheet_(name,headers){const ss=getSpreadsheet_();let sh=ss.getSheetByName(name);if(!sh)sh=ss.insertSheet(name);if(sh.getLastRow()===0)sh.appendRow(headers);ensureHeaders_(sh,headers);sh.setFrozenRows(1);return sh;}
 function normalizeHeader_(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');}
 function contactHeaderMap_(sh){const h=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0],m={};h.forEach((x,i)=>m[normalizeHeader_(x)]=i);return m;}
@@ -132,6 +133,7 @@ function doPost(e){
     if(p.action==='uploadVideoChunk')return json_({ok:true,upload:uploadVideoChunk_(p)});
     if(p.action==='uploadVideoComplete')return json_({ok:true,upload:uploadVideoComplete_(p)});
     if(p.action==='uploadImages')return json_({ok:true,images:uploadImages_(p)});
+    if(p.action==='uploadAudio')return json_({ok:true,audio:uploadAudio_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
     if(p.action==='publish'){const item=setStatus_(p.id,'Publicado');return json_({ok:!!item,item:item,error:item?null:'No se encontró el comunicado para publicar.'});}
     if(p.action==='unpublish')return json_({ok:setStatus_(p.id,'Borrador'),item:findById_(p.id)});
@@ -141,14 +143,14 @@ function doPost(e){
 function listPublished_(){return readAll_().filter(x=>String(x.estado||'').trim().toLowerCase()==='publicado').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));}
 function readAll_(){const v=getSheet_().getDataRange().getValues();return v.length<2?[]:v.slice(1).filter(r=>r[0]).map(rowToObject_);}
 function rowToObject_(r){
-  return {id:String(r[0]),estado:String(r[1]||'').trim(),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15])};
+  return {id:String(r[0]),estado:String(r[1]||'').trim(),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15]),audioUrl:String(r[16]||''),audioDriveFileId:String(r[17]||''),audioDriveUrl:String(r[18]||'')};
 }
 function splitPhotos_(v){return String(v||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);}
 function findById_(id){if(!id)return null;const sh=getSheet_(),row=findRow_(sh,id);return row<0?null:rowToObject_(sh.getRange(row,1,1,HEADERS.length).getValues()[0]);}
 function save_(p){
   const sh=getSheet_(),id=p.id||Utilities.getUuid(),now=new Date(),old=findById_(id);
-  const item={id:id,estado:old?old.estado:'Borrador',fecha:p.fecha||'',categoria:p.categoria||'Comunicado',tag:p.tag||'',titulo:p.titulo||'',resumen:p.resumen||'',contenido:p.contenido||'',fotoPrincipal:p.fotoPrincipal||'',fotos:splitPhotos_(p.fotos),videoUrl:p.videoUrl||'',videoDriveFileId:old?.videoDriveFileId||'',videoDriveUrl:old?.videoDriveUrl||'',videoDriveFolderId:old?.videoDriveFolderId||'',fechaCreacion:old&&old.fechaCreacion?old.fechaCreacion:formatDateTime_(now),fechaActualizacion:formatDateTime_(now)};
-  const row=[item.id,item.estado,item.fecha,item.categoria,item.tag,item.titulo,item.resumen,item.contenido,item.fotoPrincipal,item.fotos.join('\n'),item.videoUrl,item.videoDriveFileId,item.videoDriveUrl,item.videoDriveFolderId,item.fechaCreacion,item.fechaActualizacion];
+  const item={id:id,estado:old?old.estado:'Borrador',fecha:p.fecha||'',categoria:p.categoria||'Comunicado',tag:p.tag||'',titulo:p.titulo||'',resumen:p.resumen||'',contenido:p.contenido||'',fotoPrincipal:p.fotoPrincipal||'',fotos:splitPhotos_(p.fotos),videoUrl:p.videoUrl||'',videoDriveFileId:old?.videoDriveFileId||'',videoDriveUrl:old?.videoDriveUrl||'',videoDriveFolderId:old?.videoDriveFolderId||'',fechaCreacion:old&&old.fechaCreacion?old.fechaCreacion:formatDateTime_(now),fechaActualizacion:formatDateTime_(now),audioUrl:old?.audioUrl||'',audioDriveFileId:old?.audioDriveFileId||'',audioDriveUrl:old?.audioDriveUrl||''};
+  const row=[item.id,item.estado,item.fecha,item.categoria,item.tag,item.titulo,item.resumen,item.contenido,item.fotoPrincipal,item.fotos.join('\n'),item.videoUrl,item.videoDriveFileId,item.videoDriveUrl,item.videoDriveFolderId,item.fechaCreacion,item.fechaActualizacion,item.audioUrl,item.audioDriveFileId,item.audioDriveUrl];
   const values=sh.getDataRange().getValues();let n=-1;
   for(let i=1;i<values.length;i++)if(String(values[i][0])===id){n=i+1;break;}
   if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,row.length).setValues([row]);
@@ -205,6 +207,23 @@ function uploadImages_(p){
   const sh=getSheet_(),row=findRow_(sh,p.id);if(row<0)throw new Error('No se encontró el comunicado para asociar las imágenes.');
   const current=splitPhotos_(sh.getRange(row,10).getValue());sh.getRange(row,10).setValue(current.concat(uploaded.map(x=>x.directUrl)).join('\n'));sh.getRange(row,16).setValue(formatDateTime_(new Date()));
   return {folderId:titleFolder.getId(),folderName:titleFolder.getName(),items:uploaded};
+}
+function uploadAudio_(p){
+  if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
+  if(!p.data)throw new Error('No se recibió el archivo MP3.');
+  if(!/\.mp3$/i.test(String(p.fileName||'')))throw new Error('La nota de audio debe ser un archivo MP3.');
+  const root=getDriveRoot_(),folder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id);
+  const data=String(p.data).replace(/^data:[^;]+;base64,/,'');
+  const bytes=Utilities.base64Decode(data);
+  if(bytes.length>25*1024*1024)throw new Error('El MP3 supera el límite de 25 MB.');
+  const file=folder.createFile(Utilities.newBlob(bytes,'audio/mpeg',p.fileName));
+  try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
+  const sh=getSheet_(),row=findRow_(sh,p.id);
+  if(row<0)throw new Error('No se encontró el comunicado para asociar el audio.');
+  const url='https://drive.google.com/uc?export=download&id='+file.getId();
+  sh.getRange(row,17,1,3).setValues([[url,file.getId(),file.getUrl()]]);
+  sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  return {fileId:file.getId(),url:url,driveUrl:file.getUrl(),name:file.getName()};
 }
 function getDriveRoot_(){return CONFIG.driveRootFolderId?DriveApp.getFolderById(CONFIG.driveRootFolderId):DriveApp.getRootFolder();}
 function getOrCreateFolder_(parent,name){const it=parent.getFoldersByName(name);return it.hasNext()?it.next():parent.createFolder(name);}
