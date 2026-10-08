@@ -2,15 +2,12 @@ const CONFIG = {
   spreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   contactSpreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   sheetName: 'Comunicados',
-  adminKeyHash: 'Ik3r2026',
+  // Contraseña única del Panel Editorial: Ik3r2026
+  // Se almacena únicamente como SHA-256.
+  adminKeyHash: 'db53bd89937e9f02a479955637147321c18ce67f1247323fb0699ced91c671e6',
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
-const HEADERS = ['ID','Estado','Fecha','Categoria','Tag','Titulo','Resumen','Contenido','FotoPrincipal','Fotos','VideoURL','VideoDriveFileId','VideoDriveUrl','VideoDriveFolderId','FechaCreacion','FechaActualizacion','AudioURL','AudioDriveFileId','AudioDriveUrl'];
-
-function getSpreadsheet_() {
-  return CONFIG.spreadsheetId ? SpreadsheetApp.openById(CONFIG.spreadsheetId) : SpreadsheetApp.getActiveSpreadsheet();
-}
 function getSheet_() {
   const ss=getSpreadsheet_();
   let sh=ss.getSheetByName(CONFIG.sheetName);
