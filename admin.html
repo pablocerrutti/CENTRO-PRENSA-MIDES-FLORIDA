@@ -43,8 +43,8 @@
 <div class="form-actions"><button type="submit" id="save-btn">Guardar borrador</button><button type="button" class="secondary" id="publish-btn">Publicar</button><button type="button" class="ghost" id="clear-btn">Limpiar</button></div><div id="action-status" class="action-status" role="status" aria-live="polite">Listo para trabajar.</div>
 </form></section>
 <section class="editor-card"><div class="section-heading"><div><p class="eyebrow">CONTENIDOS</p><h2>Comunicados publicados</h2><p class="module-help">Acceso directo a los comunicados publicados y a su vista pública. También podés consultar borradores.</p></div><span id="count" class="status">0</span></div><div class="content-filter-bar"><button type="button" class="content-filter active" data-filter="Publicado">Publicados</button><button type="button" class="content-filter" data-filter="Borrador">Borradores</button><button type="button" class="content-filter" data-filter="Todos">Todos</button><button type="button" class="secondary" id="refresh-published">↻ Actualizar</button></div><div id="draft-list" class="draft-list"><p class="empty-state">Consultando Google Sheets…</p></div></section>
-<section class="editor-card"><div class="section-heading"><div><p class="eyebrow">MÓDULOS EDITORIALES</p><h2>Centro de trabajo</h2><p class="module-help">Cada área opera en su propio módulo para evitar interferencias entre comunicados, contactos, mailing, agenda y altas de funcionarios.</p></div></div><nav class="editorial-module-nav"><a href="admin.html">01 · Comunicados<small>Crear, editar, publicar y administrar multimedia.</small></a><a href="contactos-editorial.html">02 · Contactos<small>Leer E-mail 1 - Value y gestionar listas.</small></a><a href="mailing-editorial.html">03 · Mailing<small>Seleccionar listas y comunicados publicados.</small></a><a href="agenda-editorial.html">04 · Agenda<small>Calendario gráfico por área y actividad.</small></a><a href="#funcionarios-module">05 · Alta funcionarios<small>Crear y verificar usuarios en Google Sheets.</small></a><a href="funcionarios.html">06 · Portal funcionarios<small>Acceso de funcionarios y creación de actividades.</small></a></nav></section>
-<section class="editor-card" id="admin-agenda-module">
+<section class="editor-card"><div class="section-heading"><div><p class="eyebrow">MÓDULOS EDITORIALES</p><h2>Centro de trabajo</h2><p class="module-help">Cada área opera en su propio módulo para evitar interferencias entre comunicados, contactos, mailing, agenda y altas de funcionarios.</p></div></div><nav class="editorial-module-nav"><a href="admin.html">01 · Comunicados<small>Crear, editar, publicar y administrar multimedia.</small></a><a href="#contactos-module" onclick="return activateEditorialModule('contactos-module')">02 · Contactos<small>Leer E-mail 1 - Value y gestionar listas.</small></a><a href="#mailing-module" onclick="return activateEditorialModule('mailing-module')">03 · Mailing<small>Seleccionar listas y comunicados publicados.</small></a><a href="#admin-agenda-module" onclick="return activateEditorialModule('admin-agenda-module')">04 · Agenda<small>Calendario gráfico por área y actividad.</small></a><a href="#funcionarios-module" onclick="return activateEditorialModule('funcionarios-module')">05 · Alta funcionarios<small>Crear y verificar usuarios en Google Sheets.</small></a><a href="funcionarios.html">06 · Portal funcionarios<small>Acceso de funcionarios y creación de actividades.</small></a></nav></section>
+<section class="editor-card editorial-work-module" id="admin-agenda-module" hidden>
 <div class="section-heading"><div><p class="eyebrow">COORDINACIÓN DE COBERTURA</p><h2>Agenda de actividades</h2><p class="module-help">Vista exclusiva del administrador. Incluye todas las actividades propuestas por los funcionarios, con horario, área, lugar, descripción e imagen.</p></div><span id="admin-agenda-count" class="status">0 actividades</span></div>
 <div class="admin-calendar-toolbar"><button type="button" class="secondary" id="admin-prev-month">‹ Mes anterior</button><strong id="admin-month-label"></strong><button type="button" class="secondary" id="admin-next-month">Mes siguiente ›</button><button type="button" id="admin-today">Hoy</button></div>
 <div id="admin-calendar" class="admin-calendar"><p class="empty-state">Cargando agenda…</p></div>
@@ -52,7 +52,7 @@
 </section>
 <section class="status-panel"><div><strong>Base editorial</strong><span>Google Sheets + Apps Script</span></div><div><strong>Estado</strong><span id="api-status" class="status">Configurando API</span></div><div><strong>Agenda</strong><a href="funcionarios.html" style="display:inline-block;margin-top:5px;color:var(--mides-blue);font-weight:800;text-decoration:none">Abrir agenda</a></div></section>
 
-<section class="editor-card" id="contactos-module">
+<section class="editor-card editorial-work-module" id="contactos-module" hidden>
 <div class="section-heading"><div><p class="eyebrow">AGENDA DE MEDIOS</p><h2>Contactos</h2><p class="module-help">Lectura directa de la hoja <strong>Contactos</strong>. La dirección de correo se toma de la columna <strong>E-mail 1 - Value</strong>.</p></div><span id="contacts-count" class="status">0</span></div>
 <div class="module-toolbar">
   <span id="contacts-selected" class="status">0 seleccionados</span>
@@ -61,7 +61,7 @@
 </div>
 <div id="contacts-list" class="contacts-list"><div class="module-toolbar"><input id="contacts-search" placeholder="Buscar por nombre, medio, correo, teléfono o localidad…"><button type="button" class="secondary" id="refresh-contacts">↻ Actualizar contactos</button></div><p class="empty-state">Leyendo contactos…</p></div>
 </section>
-<section class="editor-card" id="mailing-module">
+<section class="editor-card editorial-work-module" id="mailing-module" hidden>
 <div class="section-heading"><div><p class="eyebrow">DISTRIBUCIÓN INSTITUCIONAL</p><h2>Mailing</h2><p class="module-help">Seleccioná las listas de destinatarios y los artículos publicados que integrarán el mailing institucional.</p></div><span id="mailing-count" class="status">0 listas</span></div>
 <div class="mailing-grid">
 <div><h3>Listas de mailing</h3><div id="mailing-lists" class="mailing-lists"><p class="empty-state">Cargando listas…</p></div><button type="button" id="new-list-btn">Nueva lista</button></div>
@@ -72,7 +72,7 @@
 <div id="mailing-result" class="campaign-preview" hidden><strong>Mailing generado</strong><br><a id="mailing-link" target="_blank" rel="noopener">Abrir mailing</a><br><a id="whatsapp-link" target="_blank" rel="noopener">Compartir por WhatsApp</a></div></div>
 </div>
 </section>
-<section class="editor-card" id="funcionarios-module">
+<section class="editor-card editorial-work-module" id="funcionarios-module" hidden>
 <div class="section-heading"><div><p class="eyebrow">GESTIÓN DE ACCESOS</p><h2>Alta de usuarios funcionarios</h2><p class="module-help">Cada usuario queda registrado en Google Sheets con rol <strong>Funcionario</strong>. La contraseña inicial es provisoria y debe cambiarse obligatoriamente en el primer acceso.</p></div><span id="func-count" class="status">0 usuarios</span></div>
 <div class="form-grid">
 <label>Nombre<input id="func-name" placeholder="Nombre y apellido" required></label>
@@ -92,11 +92,12 @@
 let editorKey="",items=[],pendingVideo=null,pendingImages=[],pendingAudio=null,editorialAuthorized=false,editorialAuthPromise=null,currentContentFilter="Publicado";
 const $=id=>document.getElementById(id),today=new Date().toISOString().slice(0,10);
 $("date").value=today;
-function showNotice(t,type="success"){const n=$("notice");n.textContent=t;n.className="toast "+type;n.hidden=false;clearTimeout(window.noticeTimer);window.noticeTimer=setTimeout(()=>n.hidden=true,6500);const s=$("action-status");if(s){s.textContent=t;s.className="action-status "+type}}
+function showNotice(t,type="success"){const n=$("notice");if(n){n.textContent=t;n.className="toast "+type;n.hidden=false;clearTimeout(window.noticeTimer);window.noticeTimer=setTimeout(()=>n.hidden=true,6500)}const s=$("action-status");if(s){s.textContent=t;s.className="action-status "+type}}
 function esc(v){return String(v??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
 function key(){return editorKey}
 async function authorizeEditorial(){
   if(editorialAuthorized)return true;
+  try{if(sessionStorage.getItem("midesEditorialAuth")==="1"){editorKey="Ik3r2026";editorialAuthorized=true;return true}}catch(_){}
   const input=$("editor-auth-password"),screen=$("editor-auth-screen"),error=$("editor-auth-error");
   const k=String(input?.value||"");
   if(k!=="Ik3r2026"){
@@ -108,6 +109,7 @@ async function authorizeEditorial(){
   // El servidor recibe la misma clave en cada operación posterior.
   editorKey="Ik3r2026";
   editorialAuthorized=true;
+  try{sessionStorage.setItem("midesEditorialAuth","1")}catch(_){}
   if(screen)screen.classList.add("ok");
   if(error)error.style.display="none";
   // Intentamos cargar inmediatamente; cualquier problema de API queda
@@ -227,6 +229,7 @@ $("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getF
     const error=document.getElementById("editor-auth-error");
     if(!form||!input||!screen)return;
     if(form.dataset.authGateInstalled==="1")return;
+    try{if(sessionStorage.getItem("midesEditorialAuth")==="1"){window.editorialAuthorized=true;screen.classList.add("ok");return;}}catch(_){}
     form.dataset.authGateInstalled="1";
     form.addEventListener("submit",function(e){
       e.preventDefault();
@@ -237,6 +240,7 @@ $("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getF
         return false;
       }
       window.editorialAuthorized=true;
+      try{sessionStorage.setItem("midesEditorialAuth","1")}catch(_){ }
       screen.classList.add("ok");
       if(error)error.style.display="none";
       return false;
