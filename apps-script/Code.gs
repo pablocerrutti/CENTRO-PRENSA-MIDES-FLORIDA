@@ -290,6 +290,7 @@ function doPost(e){
     // Acceso editorial directo: únicamente la clave exacta Ik3r2026.
     if(String(p.key||'')!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
     if(p.action==='adminList'){invalidateEditorialCache_();return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});}
+    if(p.action==='adminAgendaList')return json_({ok:true,items:listAgenda_(p.from,p.to)});
     if(p.action==='funcionariosList')return json_({ok:true,items:listFuncionarios_()});
     if(p.action==='funcionarioSave')return json_({ok:true,item:saveFuncionario_(p)});
     if(p.action==='funcionarioDelete')return json_({ok:true,item:deleteFuncionario_(p.id)});
