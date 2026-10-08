@@ -131,6 +131,7 @@ async function post(action,extra={}){
  if(!data.ok)throw new Error(data.error||"Error de API");
  return data;
 }
+function activateEditorialModule(id){document.querySelectorAll(".editorial-work-module").forEach(el=>el.hidden=true);const el=document.getElementById(id);if(!el)return false;el.hidden=false;el.scrollIntoView({behavior:"smooth",block:"start"});if(id==="contactos-module")loadContactsModule();if(id==="mailing-module")loadMailingModule();if(id==="admin-agenda-module")loadAdminAgenda();if(id==="funcionarios-module")loadFuncionarios();return false}
 async function load(){
  if(!window.PRENSA_CONFIG?.apiUrl){$("api-status").textContent="Falta URL de API";$("draft-list").innerHTML='<p class="empty-state">Primero hay que publicar la API de Apps Script y colocar su URL en config.js.</p>';return}
  try{const data=await post("adminList");items=data.items||[];$("api-status").textContent="Conectado";render();showNotice("✓ Conexión con Google Sheets confirmada.","success")}catch(e){$("api-status").textContent="Error de conexión";$("draft-list").innerHTML='<p class="empty-state">'+esc(e.message)+'</p>';showNotice("⚠ No se pudo consultar Google Sheets: "+e.message,"error")}
