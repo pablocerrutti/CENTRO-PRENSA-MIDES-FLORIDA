@@ -66,26 +66,19 @@ function contactSource_(){const sh=getSpreadsheet_().getSheetByName(CONTACT_SOUR
 function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?String(r[c]??'').trim():''};const nombre=val(['Nombre','First Name','Given Name']),apellido=val(['Apellido','Last Name','Family Name']),nombreCompleto=val(['NombreCompleto','Nombre completo','Name','Display Name'])||[nombre,apellido].filter(Boolean).join(' ');return {nombre,apellido,nombreCompleto,email:val(['Email','E-mail','Correo electrónico','Correo','Email 1 - Value','E-mail 1 - Value']),telefono:val(['Telefono','Teléfono','Phone','Mobile Phone','Phone 1 - Value']),medio:val(['Medio','Organization','Organización','Empresa','Company','Organization 1 - Name']),cargo:val(['Cargo','Title','Puesto','Organization 1 - Title']),localidad:val(['Localidad','Ciudad','City','Address 1 - City'])};}
 function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
 function readContacts_(){
-  const src=contactSource_();
-  if(!src.sheet||src.rows.length<2)return [];
-  const normalized=[];
-  const membershipsSheet=getSpreadsheet_().getSheetByName(MEMBERSHIPS_SHEET);
-  const listMap={};
+  const ss=getSpreadsheet_(),sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
+  if(!sh||sh.getLastRow()<2)return [];
+  const values=sh.getRange(2,19,sh.getLastRow()-1,1).getDisplayValues();
+  const membershipsSheet=ss.getSheetByName(MEMBERSHIPS_SHEET),listMap={};
   if(membershipsSheet&&membershipsSheet.getLastRow()>1){
     const mv=membershipsSheet.getRange(2,1,membershipsSheet.getLastRow()-1,MEMBERSHIP_HEADERS.length).getValues();
     mv.forEach(r=>{const cid=String(r[0]||''),lid=String(r[1]||'');if(cid&&lid)(listMap[cid]||(listMap[cid]=[])).push(lid);});
   }
-  const lists=listMailingLists_();
-  const namesById={};lists.forEach(l=>namesById[l.id]=l.nombre);
-  src.rows.slice(1).forEach((r,i)=>{
-    const o=sourceContact_(r,src.map);
-    if(!o.nombreCompleto&&!o.email&&!o.telefono)return;
-    const key=(o.email||'').toLowerCase().trim()||((o.telefono||'').replace(/\\D/g,'')?'tel-'+(o.telefono||'').replace(/\\D/g,''):'row-'+(i+2));
-    const id='C-'+Utilities.base64EncodeWebSafe(key).replace(/=+$/,'').slice(0,20);
-    const ids=listMap[id]||[];
-    normalized.push({id,nombre:o.nombre,apellido:o.apellido,nombreCompleto:o.nombreCompleto,medio:o.medio,cargo:o.cargo,email:o.email,telefono:o.telefono,localidad:o.localidad,listas:ids.map(x=>namesById[x]).filter(Boolean),estado:'Activo',observaciones:'',fechaActualizacion:formatDateTime_(new Date())});
+  const lists=listMailingLists_(),namesById={};lists.forEach(l=>namesById[l.id]=l.nombre);
+  return values.map(r=>String(r[0]||'').trim().toLowerCase()).filter(e=>e&&e.indexOf('@')>0).map(email=>{
+    const id='C-'+Utilities.base64EncodeWebSafe(email).replace(/=+$/,'').slice(0,20),ids=listMap[id]||[];
+    return {id,nombre:email.split('@')[0],apellido:'',nombreCompleto:email,medio:'',cargo:'',email,telefono:'',localidad:'',listas:ids.map(x=>namesById[x]).filter(Boolean),estado:'Activo',observaciones:'',fechaActualizacion:formatDateTime_(new Date())};
   });
-  return normalized;
 }
 function importContacts_(){
   const src=contactSource_();
