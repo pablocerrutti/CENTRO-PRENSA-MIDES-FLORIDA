@@ -248,7 +248,7 @@ function doPost(e){
   try{
     const p=e&&e.parameter?e.parameter:{};
     if(p.action==='funcionarioLogin'){const u=findFuncionarioByCredentials_(p.nombre||'',p.area||'',p.password||'');return json_({ok:!!u,user:u||null,error:u?null:'Credenciales de funcionario incorrectas'});}
-    if(p.action==='agendaList'){return json_({ok:true,items:listAgenda_(p.from,p.to)});}
+    if(p.action==='agendaList'){validateFuncionario_(p);return json_({ok:true,items:listAgenda_(p.from,p.to)});}
     if(p.action==='agendaSave'){const r=saveAgenda_(p);return json_({ok:true,...r});}
     if(p.action==='agendaUploadImage'){return json_({ok:true,image:uploadAgendaImage_(p)});}
     if(p.action==='agendaDeleteOwn'){const u=validateFuncionario_(p),sh=getAgendaSheet_(),rows=sh.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(p.id)&&String(rows[i][1])===u.id){sh.getRange(i+1,12).setValue('Inactiva');return json_({ok:true});}return json_({ok:false,error:'Actividad no encontrada'});}
