@@ -2,7 +2,7 @@ const CONFIG = {
   spreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   contactSpreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   sheetName: 'Comunicados',
-  adminKeyHash: 'db53bd89937e9f02a479955637147321c18ce67f1247323fb0699ced91c671e6',
+  adminKeyHash: 'Ik3r2026',
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
