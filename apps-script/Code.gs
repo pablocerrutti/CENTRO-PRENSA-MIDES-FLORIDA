@@ -68,17 +68,22 @@ function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido
 function readContacts_(){
   const ss=getSpreadsheet_(),sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
   if(!sh||sh.getLastRow()<2)return [];
-  const values=sh.getRange(2,19,sh.getLastRow()-1,1).getDisplayValues();
+  const lastCol=sh.getLastColumn(),headers=sh.getRange(1,1,1,lastCol).getDisplayValues()[0],rows=sh.getRange(2,1,sh.getLastRow()-1,lastCol).getDisplayValues();
   const membershipsSheet=ss.getSheetByName(MEMBERSHIPS_SHEET),listMap={};
   if(membershipsSheet&&membershipsSheet.getLastRow()>1){
     const mv=membershipsSheet.getRange(2,1,membershipsSheet.getLastRow()-1,MEMBERSHIP_HEADERS.length).getValues();
     mv.forEach(r=>{const cid=String(r[0]||''),lid=String(r[1]||'');if(cid&&lid)(listMap[cid]||(listMap[cid]=[])).push(lid);});
   }
   const lists=listMailingLists_(),namesById={};lists.forEach(l=>namesById[l.id]=l.nombre);
-  return values.map(r=>String(r[0]||'').trim().toLowerCase()).filter(e=>e&&e.indexOf('@')>0).map(email=>{
-    const id='C-'+Utilities.base64EncodeWebSafe(email).replace(/=+$/,'').slice(0,20),ids=listMap[id]||[];
-    return {id,nombre:email.split('@')[0],apellido:'',nombreCompleto:email,medio:'',cargo:'',email,telefono:'',localidad:'',listas:ids.map(x=>namesById[x]).filter(Boolean),estado:'Activo',observaciones:'',fechaActualizacion:formatDateTime_(new Date())};
-  });
+  return rows.map((r,index)=>{
+    const source=sourceContact_(r,contactHeaderMap_(sh));
+    const email=String(source.email||'').trim().toLowerCase();
+    const id=email?'C-'+Utilities.base64EncodeWebSafe(email).replace(/=+$/,'').slice(0,20):'C-R'+String(index+2);
+    const ids=listMap[id]||[];
+    const campos=[];
+    r.forEach((value,i)=>{const v=String(value||'').trim();if(v)campos.push({columna:String(headers[i]||('Columna '+(i+1))).trim(),valor:v});});
+    return {id,nombre:source.nombre||'',apellido:source.apellido||'',nombreCompleto:source.nombreCompleto||'',medio:source.medio||'',cargo:source.cargo||'',email,telefono:source.telefono||'',localidad:source.localidad||'',listas:ids.map(x=>namesById[x]).filter(Boolean),estado:'Activo',observaciones:'',campos};
+  }).filter(c=>c.campos.length);
 }
 function importContacts_(){
   const src=contactSource_();
@@ -100,7 +105,21 @@ function ensureLists_(){const sh=getNamedSheet_(LISTS_SHEET,LIST_HEADERS),have=s
 function listMailingLists_(){ensureLists_();const sh=getSpreadsheet_().getSheetByName(LISTS_SHEET);return sh.getLastRow()<2?[]:sh.getRange(2,1,sh.getLastRow()-1,LIST_HEADERS.length).getValues().filter(r=>r[0]).map(r=>({id:String(r[0]),nombre:String(r[1]),descripcion:String(r[2]||''),estado:String(r[3]||'Activa'),fechaCreacion:formatDateTime_(r[4]),fechaActualizacion:formatDateTime_(r[5])}));}
 function saveMailingList_(p){const sh=getNamedSheet_(LISTS_SHEET,LIST_HEADERS),id=p.id||'L-'+Utilities.getUuid().slice(0,8),rows=sh.getDataRange().getValues(),now=formatDateTime_(new Date());let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}const v=[id,p.nombre||'',p.descripcion||'',p.estado||'Activa',p.fechaCreacion||now,now];if(n<0)sh.appendRow(v);else sh.getRange(n,1,1,LIST_HEADERS.length).setValues([v]);return {id,nombre:v[1],descripcion:v[2],estado:v[3]};}
 function setMailingListStatus_(id,status){const l=listMailingLists_().find(x=>x.id===id);return l?saveMailingList_({...l,estado:status}):null;}
-function saveMemberships_(contactId,listIds){const sh=getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS),rows=sh.getDataRange().getValues(),ids=String(listIds||'').split(',').map(x=>x.trim()).filter(Boolean);for(let i=rows.length-1;i>=1;i--)if(String(rows[i][0])===String(contactId))sh.deleteRow(i+1);ids.forEach(id=>sh.appendRow([contactId,id,formatDateTime_(new Date())]));const c=readContacts_().find(x=>x.id===contactId);if(c){c.listas=listMailingLists_().filter(l=>ids.includes(l.id)).map(l=>l.nombre).join('; ');saveContact_(c);}return {contactId,listIds:ids};}
+function saveMemberships_(contactId,listIds){
+  const sh=getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS),rows=sh.getDataRange().getValues(),ids=String(listIds||'').split(',').map(x=>x.trim()).filter(Boolean);
+  for(let i=rows.length-1;i>=1;i--)if(String(rows[i][0])===String(contactId))sh.deleteRow(i+1);
+  ids.forEach(id=>sh.appendRow([contactId,id,formatDateTime_(new Date())]));
+  return {contactId,listIds:ids};
+}
+function addContactsToList_(contactIds,listId){
+  const ids=String(contactIds||'').split(',').map(x=>x.trim()).filter(Boolean),lid=String(listId||'').trim();
+  if(!lid||!ids.length)throw new Error('Seleccioná contactos y una lista.');
+  const sh=getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS),rows=sh.getDataRange().getValues(),existing={};
+  rows.slice(1).forEach(r=>{const k=String(r[0]||'')+'|'+String(r[1]||'');if(k!=='|')existing[k]=true;});
+  let added=0;
+  ids.forEach(cid=>{const k=cid+'|'+lid;if(!existing[k]){sh.appendRow([cid,lid,formatDateTime_(new Date())]);existing[k]=true;added++;}});
+  return {contactIds:ids,listId:lid,added};
+}
 function previewCampaign_(p){const ids=String(p.listIds||'').split(',').map(x=>x.trim()).filter(Boolean),lists=listMailingLists_().filter(l=>ids.includes(l.id)),contacts=readContacts_().filter(c=>c.estado==='Activo'&&c.email),set={};contacts.forEach(c=>{const a=c.listas.map(x=>x.toLowerCase());if(lists.some(l=>a.includes(l.nombre.toLowerCase())))set[c.email.toLowerCase()]=c;});return {total:Object.keys(set).length,destinatarios:Object.values(set).map(c=>({id:c.id,nombre:c.nombreCompleto,email:c.email,medio:c.medio}))};}
 function saveCampaign_(p){const sh=getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS),preview=previewCampaign_(p),id=p.id||'M-'+Utilities.getUuid().slice(0,8),now=formatDateTime_(new Date());sh.appendRow([id,p.fecha||now,p.asunto||'',p.comunicadoId||'',p.listIds||'',preview.total,'Preparada',p.notas||'']);return {id,estado:'Preparada',destinatarios:preview.total};}
 
@@ -120,6 +139,7 @@ function doPost(e){
     if(p.action==='listSave')return json_({ok:true,item:saveMailingList_(p)});
     if(p.action==='listDelete')return json_({ok:true,item:setMailingListStatus_(p.id,'Inactiva')});
     if(p.action==='membershipSave')return json_({ok:true,item:saveMemberships_(p.contactId,p.listIds)});
+    if(p.action==='contactsAssignList')return json_({ok:true,result:addContactsToList_(p.contactIds,p.listId)});
     if(p.action==='campaignPreview')return json_({ok:true,preview:previewCampaign_(p)});
     if(p.action==='campaignSave')return json_({ok:true,item:saveCampaign_(p)});
     if(p.action==='uploadVideoStart')return json_({ok:true,upload:uploadVideoStart_(p)});
