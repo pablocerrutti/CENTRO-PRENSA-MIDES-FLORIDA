@@ -203,6 +203,9 @@ function saveFuncionario_(p){
   const rows=sh.getDataRange().getValues();let n=-1;
   for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
   if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,FUNC_HEADERS.length).setValues([row]);
+  // Fuerza la escritura antes de responder al panel editorial: la ID que recibe
+  // el navegador es la misma que ya quedó persistida en Google Sheets.
+  SpreadsheetApp.flush();
   return funcionarioRow_(row);
 }
 function deleteFuncionario_(id){
