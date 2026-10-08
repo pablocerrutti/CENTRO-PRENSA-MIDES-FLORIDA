@@ -91,7 +91,21 @@ function importContacts_(){
   }
   return {imported,updated,skipped,total:imported+updated};
 }
-function listContacts_(){if(!getSpreadsheet_().getSheetByName(CONTACTS_SHEET)||getSpreadsheet_().getSheetByName(CONTACTS_SHEET).getLastRow()<2)importContacts_();return readContacts_();}
+function ensureContactsStructure_(){
+  getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS);
+  ensureLists_();
+  getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS);
+  getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS);
+}
+function listContacts_(){
+  const ss=getSpreadsheet_();
+  const source=ss.getSheetByName(CONTACT_SOURCE_SHEET);
+  if(!source)throw new Error('No existe la hoja Contactos. Creá o importá primero la hoja Contactos en este mismo archivo de Google Sheets.');
+  ensureContactsStructure_();
+  const target=ss.getSheetByName(CONTACTS_SHEET);
+  if(target.getLastRow()<2 && source.getLastRow()>=2)importContacts_();
+  return readContacts_();
+}
 function saveContact_(p){const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),id=p.id||'C-'+Utilities.getUuid().slice(0,8),old=readContacts_().find(x=>x.id===id),item=[id,p.nombre||'',p.apellido||'',p.nombreCompleto||[p.nombre,p.apellido].filter(Boolean).join(' '),p.medio||'',p.cargo||'',p.email||'',p.telefono||'',p.localidad||'',p.listas||'',p.estado||old?.estado||'Activo',p.observaciones||old?.observaciones||'',formatDateTime_(new Date())];const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}if(n<0)sh.appendRow(item);else sh.getRange(n,1,1,CONTACT_HEADERS.length).setValues([item]);return contactRow_(item);}
 function setContactStatus_(id,status){const c=readContacts_().find(x=>x.id===id);if(!c)return null;c.estado=status;return saveContact_(c);}
 function ensureLists_(){const sh=getNamedSheet_(LISTS_SHEET,LIST_HEADERS),have=sh.getDataRange().getValues().slice(1).map(r=>String(r[1]).toLowerCase());['Prensa Florida','Radios','Televisión','Prensa escrita','Medios digitales','Medios nacionales','Institucional','Prioritarios'].forEach(n=>{if(!have.includes(n.toLowerCase()))sh.appendRow(['L-'+Utilities.getUuid().slice(0,8),n,'','Activa',formatDateTime_(new Date()),formatDateTime_(new Date())]);});}
