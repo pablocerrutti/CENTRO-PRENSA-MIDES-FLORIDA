@@ -1,5 +1,5 @@
 const CONFIG = {
-  spreadsheetId: '',
+  spreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   sheetName: 'Comunicados',
   adminKey: String.fromCharCode(73,107,51,114,50,48,50,54),
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
@@ -48,6 +48,7 @@ function doGet(e){
     if(a==='ping') return json_({ok:true,service:'Centro de Prensa MIDES Florida'});
     if(a==='list') return json_({ok:true,items:listPublished_()});
     if(a==='get'){const item=findById_(e.parameter.id);const publicItem=item&&item.estado==='Publicado'?item:null;return json_({ok:!!publicItem,item:publicItem});}
+    if(a==='mailing'){const item=getMailing_(e.parameter.id);return json_({ok:!!item,item:item||null});}
     return json_({ok:false,error:'Acción GET no válida'});
   }catch(err){return json_({ok:false,error:String(err)});}
 }
@@ -56,6 +57,7 @@ const CONTACT_HEADERS=['ID','Nombre','Apellido','NombreCompleto','Medio','Cargo'
 const LIST_HEADERS=['ID','Nombre','Descripcion','Estado','FechaCreacion','FechaActualizacion'];
 const MEMBERSHIP_HEADERS=['ContactoID','ListaID','FechaAsignacion'];
 const CAMPAIGN_HEADERS=['ID','Fecha','Asunto','ComunicadoID','ListaIDs','Destinatarios','Estado','Notas'];
+const MAILING_HEADERS=['ID','Fecha','Asunto','ListaIDs','ComunicadoIDs','Destinatarios','Estado','PublicUrl','WhatsAppUrl'];
 const CONTACT_SOURCE_SHEET='Contactos', CONTACTS_SHEET='Contactos_Normalizados', LISTS_SHEET='ListasMailing', MEMBERSHIPS_SHEET='Contactos_Listas', CAMPAIGNS_SHEET='Mailing_Campañas';
 function ensureContactsStructure_(){ensureLists_();getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS);getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS);}
 function getNamedSheet_(name,headers){const ss=getSpreadsheet_();let sh=ss.getSheetByName(name);if(!sh)sh=ss.insertSheet(name);if(sh.getLastRow()===0)sh.appendRow(headers);ensureHeaders_(sh,headers);sh.setFrozenRows(1);return sh;}
@@ -67,23 +69,12 @@ function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?St
 function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
 function readContacts_(){
   const ss=getSpreadsheet_(),sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
-  if(!sh||sh.getLastRow()<2)return [];
-  const lastCol=sh.getLastColumn(),headers=sh.getRange(1,1,1,lastCol).getDisplayValues()[0],rows=sh.getRange(2,1,sh.getLastRow()-1,lastCol).getDisplayValues();
-  const membershipsSheet=ss.getSheetByName(MEMBERSHIPS_SHEET),listMap={};
-  if(membershipsSheet&&membershipsSheet.getLastRow()>1){
-    const mv=membershipsSheet.getRange(2,1,membershipsSheet.getLastRow()-1,MEMBERSHIP_HEADERS.length).getValues();
-    mv.forEach(r=>{const cid=String(r[0]||''),lid=String(r[1]||'');if(cid&&lid)(listMap[cid]||(listMap[cid]=[])).push(lid);});
-  }
-  const lists=listMailingLists_(),namesById={};lists.forEach(l=>namesById[l.id]=l.nombre);
-  return rows.map((r,index)=>{
-    const source=sourceContact_(r,contactHeaderMap_(sh));
-    const email=String(source.email||'').trim().toLowerCase();
-    const id=email?'C-'+Utilities.base64EncodeWebSafe(email).replace(/=+$/,'').slice(0,20):'C-R'+String(index+2);
-    const ids=listMap[id]||[];
-    const campos=[];
-    r.forEach((value,i)=>{const v=String(value||'').trim();if(v)campos.push({columna:String(headers[i]||('Columna '+(i+1))).trim(),valor:v});});
-    return {id,nombre:source.nombre||'',apellido:source.apellido||'',nombreCompleto:source.nombreCompleto||'',medio:source.medio||'',cargo:source.cargo||'',email,telefono:source.telefono||'',localidad:source.localidad||'',listas:ids.map(x=>namesById[x]).filter(Boolean),estado:'Activo',observaciones:'',campos};
-  }).filter(c=>c.campos.length);
+  if(!sh||sh.getLastRow()<2||sh.getLastColumn()<19)return [];
+  const values=sh.getRange(2,19,sh.getLastRow()-1,1).getDisplayValues();
+  const ms=ss.getSheetByName(MEMBERSHIPS_SHEET),map={};
+  if(ms&&ms.getLastRow()>1)ms.getRange(2,1,ms.getLastRow()-1,2).getValues().forEach(r=>{const k=String(r[0]||''),v=String(r[1]||'');if(k&&v)(map[k]||(map[k]=[])).push(v)});
+  const lists=listMailingLists_(),names={};lists.forEach(l=>names[l.id]=l.nombre);
+  return values.map(r=>{const email=String(r[0]||'').trim().toLowerCase();if(!email)return null;const id='C-'+Utilities.base64EncodeWebSafe(email).replace(/=+$/,'').slice(0,32);return{id,nombre:email,apellido:'',nombreCompleto:email,medio:'',cargo:'',email,telefono:'',localidad:'',listas:(map[id]||[]).map(x=>names[x]).filter(Boolean),estado:'Activo',observaciones:'',campos:[{columna:'S',valor:email}]}}).filter(Boolean);
 }
 function importContacts_(){
   const src=contactSource_();
@@ -122,6 +113,21 @@ function addContactsToList_(contactIds,listId){
 }
 function previewCampaign_(p){const ids=String(p.listIds||'').split(',').map(x=>x.trim()).filter(Boolean),lists=listMailingLists_().filter(l=>ids.includes(l.id)),contacts=readContacts_().filter(c=>c.estado==='Activo'&&c.email),set={};contacts.forEach(c=>{const a=c.listas.map(x=>x.toLowerCase());if(lists.some(l=>a.includes(l.nombre.toLowerCase())))set[c.email.toLowerCase()]=c;});return {total:Object.keys(set).length,destinatarios:Object.values(set).map(c=>({id:c.id,nombre:c.nombreCompleto,email:c.email,medio:c.medio}))};}
 function saveCampaign_(p){const sh=getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS),preview=previewCampaign_(p),id=p.id||'M-'+Utilities.getUuid().slice(0,8),now=formatDateTime_(new Date());sh.appendRow([id,p.fecha||now,p.asunto||'',p.comunicadoId||'',p.listIds||'',preview.total,'Preparada',p.notas||'']);return {id,estado:'Preparada',destinatarios:preview.total};}
+function getMailingSheet_(){return getNamedSheet_('Mailings',MAILING_HEADERS);}
+function saveMailing_(p){
+ const sh=getMailingSheet_(),id=p.id||'ML-'+Utilities.getUuid().slice(0,8),now=formatDateTime_(new Date());
+ const listIds=String(p.listIds||'').split(',').map(x=>x.trim()).filter(Boolean),comunicadoIds=String(p.comunicadoIds||'').split(',').map(x=>x.trim()).filter(Boolean);
+ const preview=previewCampaign_({listIds:listIds.join(',')}),publicUrl=String(p.publicUrl||'').trim(),whats=publicUrl?'https://wa.me/?text='+encodeURIComponent('Compartir mailing institucional MIDES Florida: '+publicUrl):'';
+ const row=[id,p.fecha||now,p.asunto||'Mailing institucional',listIds.join(','),comunicadoIds.join(','),preview.total,'Publicado',publicUrl,whats];
+ const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break}if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,row.length).setValues([row]);
+ return{id,fecha:row[1],asunto:row[2],listIds:row[3],comunicadoIds:row[4],destinatarios:preview.total,estado:row[6],publicUrl,whatsappUrl:whats};
+}
+function getMailing_(id){
+ if(!id)return null;const sh=getMailingSheet_();if(sh.getLastRow()<2)return null;
+ const r=sh.getRange(2,1,sh.getLastRow()-1,MAILING_HEADERS.length).getValues().find(x=>String(x[0])===String(id));if(!r)return null;
+ const ids=String(r[4]||'').split(',').map(x=>x.trim()).filter(Boolean);
+ return{id:String(r[0]),fecha:formatDateTime_(r[1]),asunto:String(r[2]||''),listaIds:String(r[3]||'').split(',').filter(Boolean),destinatarios:Number(r[5]||0),estado:String(r[6]||''),publicUrl:String(r[7]||''),whatsappUrl:String(r[8]||''),items:ids.map(findById_).filter(x=>x&&x.estado==='Publicado')};
+}
 
 function doPost(e){
   try{
@@ -142,10 +148,12 @@ function doPost(e){
     if(p.action==='contactsAssignList')return json_({ok:true,result:addContactsToList_(p.contactIds,p.listId)});
     if(p.action==='campaignPreview')return json_({ok:true,preview:previewCampaign_(p)});
     if(p.action==='campaignSave')return json_({ok:true,item:saveCampaign_(p)});
+    if(p.action==='mailingSave')return json_({ok:true,item:saveMailing_(p)});
     if(p.action==='uploadVideoStart')return json_({ok:true,upload:uploadVideoStart_(p)});
     if(p.action==='uploadVideoChunk')return json_({ok:true,upload:uploadVideoChunk_(p)});
     if(p.action==='uploadVideoComplete')return json_({ok:true,upload:uploadVideoComplete_(p)});
     if(p.action==='uploadImages')return json_({ok:true,images:uploadImages_(p)});
+    if(p.action==='uploadCover')return json_({ok:true,cover:uploadCover_(p)});
     if(p.action==='uploadAudio')return json_({ok:true,audio:uploadAudio_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
     if(p.action==='publish'){const item=setStatus_(p.id,'Publicado');return json_({ok:!!item,item:item,error:item?null:'No se encontró el comunicado para publicar.'});}
@@ -211,6 +219,15 @@ function uploadVideoChunk_(p){
   sh.getRange(row,12,1,4).setValues([[file.id,fileUrl,p.folderId||'',formatDateTime_(new Date())]]);
   sh.getRange(row,16).setValue(formatDateTime_(new Date()));
   return {complete:true,fileId:file.id,fileUrl:fileUrl,previewUrl:previewUrl,folderId:p.folderId||'',folderName:p.folderName||'',name:file.name||''};
+}
+function uploadCover_(p){
+ if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');if(!p.data)throw new Error('No se recibió la foto principal.');
+ const root=getDriveRoot_(),folder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id),data=String(p.data).replace(/^data:[^;]+;base64,/,'');
+ const bytes=Utilities.base64Decode(data);if(bytes.length>10*1024*1024)throw new Error('La foto principal supera el límite de 10 MB.');
+ const file=folder.createFile(Utilities.newBlob(bytes,p.mimeType||'image/jpeg',p.fileName||'foto-principal.jpg'));try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW)}catch(err){}
+ const sh=getSheet_(),row=findRow_(sh,p.id);if(row<0)throw new Error('No se encontró el comunicado para asociar la foto principal.');
+ const url='https://drive.google.com/uc?export=view&id='+file.getId();sh.getRange(row,9).setValue(url);sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+ return{url,fileId:file.getId(),driveUrl:file.getUrl(),name:file.getName(),folderName:folder.getName()};
 }
 function uploadImages_(p){
   if(!p.id)throw new Error('Primero guardá el comunicado como borrador.');
