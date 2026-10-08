@@ -80,64 +80,22 @@ function firstCol_(m,names){for(const n of names){const k=normalizeHeader_(n);if
 function contactSource_(){const sh=getSpreadsheet_().getSheetByName(CONTACT_SOURCE_SHEET);if(!sh||sh.getLastRow()<2)return {sheet:sh,rows:[],map:{}};return {sheet:sh,rows:sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues(),map:contactHeaderMap_(sh)};}
 function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?String(r[c]??'').trim():''};const nombre=val(['Nombre','First Name','Given Name']),apellido=val(['Apellido','Last Name','Family Name']),nombreCompleto=val(['NombreCompleto','Nombre completo','Name','Display Name'])||[nombre,apellido].filter(Boolean).join(' ');return {nombre,apellido,nombreCompleto,email:val(['Email','E-mail','Correo electrónico','Correo','Email 1 - Value','E-mail 1 - Value']),telefono:val(['Telefono','Teléfono','Phone','Mobile Phone','Phone 1 - Value']),medio:val(['Medio','Organization','Organización','Empresa','Company','Organization 1 - Name']),cargo:val(['Cargo','Title','Puesto','Organization 1 - Title']),localidad:val(['Localidad','Ciudad','City','Address 1 - City'])};}
 function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
-function readContacts_(){
-  const ss=SpreadsheetApp.openById(CONFIG.contactSpreadsheetId);
-  const sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
-  if(!sh||sh.getLastRow()<2)return [];
-
-  // Fuente única: hoja Contactos. Buscar el encabezado exacto
-  // "E-mail 1 - Value"; si no existe, usar S como respaldo.
-  const headers=sh.getRange(1,1,1,Math.max(19,sh.getLastColumn())).getDisplayValues()[0];
-  const normalized=headers.map(normalizeHeader_);
-  let col=normalized.indexOf(normalizeHeader_('E-mail 1 - Value'));
-  if(col<0)col=18;
-  if(col>=sh.getLastColumn())return [];
-
-  const values=sh.getRange(2,col+1,sh.getLastRow()-1,1).getDisplayValues();
-  const ms=ss.getSheetByName(MEMBERSHIPS_SHEET),map={};
-  if(ms&&ms.getLastRow()>1)ms.getRange(2,1,ms.getLastRow()-1,2).getValues().forEach(r=>{
-    const k=String(r[0]||''),v=String(r[1]||'');
-    if(k&&v)(map[k]||(map[k]=[])).push(v);
-  });
-  const lists=listMailingLists_(),names={};
-  lists.forEach(l=>names[l.id]=l.nombre);
-
-  return values.map(r=>{
-    const email=String(r[0]||'').trim();
-    if(!email)return null;
-    const normalizedEmail=email.toLowerCase();
-    const id='C-'+Utilities.base64EncodeWebSafe(normalizedEmail).replace(/=+$/,'').slice(0,32);
-    return {
-      id,
-      nombre:email,
-      apellido:'',
-      nombreCompleto:email,
-      medio:'',
-      cargo:'',
-      email,
-      telefono:'',
-      localidad:'',
-      listas:(map[id]||[]).map(x=>names[x]).filter(Boolean),
-      estado:'Activo',
-      observaciones:'',
-      campos:[{columna:'E-mail 1 - Value',valor:email}]
-    };
-  }).filter(Boolean);
+function syncContactsNormalized_(){
+ const src=contactSource_();if(!src.sheet)throw new Error('No existe la hoja Contactos.');
+ const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),out=[],seen={};
+ src.rows.slice(1).forEach(r=>{
+  const o=sourceContact_(r,src.map);if(!(o.nombreCompleto||o.email||o.telefono))return;
+  const id='C-'+Utilities.base64EncodeWebSafe(String(o.email||o.telefono||o.nombreCompleto).toLowerCase()).replace(/=+$/,'').slice(0,36);
+  if(seen[id])return;seen[id]=1;
+  out.push([id,o.nombre,o.apellido,o.nombreCompleto,o.medio,o.cargo,o.email,o.telefono,o.localidad,'','Activo','',formatDateTime_(new Date())]);
+ });
+ if(sh.getLastRow()>1)sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).clearContent();
+ if(out.length)sh.getRange(2,1,out.length,CONTACT_HEADERS.length).setValues(out);
+ SpreadsheetApp.flush();return {imported:out.length,sourceRows:Math.max(0,src.rows.length-1)};
 }
-function importContacts_(){
-  const src=contactSource_();
-  if(!src.sheet)throw new Error('No existe la hoja Contactos.');
-  const total=src.rows.slice(1).filter(r=>{const o=sourceContact_(r,src.map);return !!(o.nombreCompleto||o.email||o.telefono);}).length;
-  ensureContactsStructure_();
-  return {imported:total,updated:0,skipped:Math.max(0,src.rows.length-1-total),total};
-}
-function listContacts_(){
-  const ss=getSpreadsheet_();
-  const source=ss.getSheetByName(CONTACT_SOURCE_SHEET);
-  if(!source)throw new Error('No existe la hoja Contactos. Creá o importá primero la hoja Contactos en este mismo archivo de Google Sheets.');
-  ensureContactsStructure_();
-  return readContacts_();
-}
+function readContacts_(){syncContactsNormalized_();const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS);if(sh.getLastRow()<2)return [];return sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).getValues().filter(r=>r[0]).map(contactRow_);}
+function importContacts_(){return syncContactsNormalized_();}
+function listContacts_(){ensureContactsStructure_();return readContacts_();}
 function saveContact_(p){const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),id=p.id||'C-'+Utilities.getUuid().slice(0,8),old=readContacts_().find(x=>x.id===id),item=[id,p.nombre||'',p.apellido||'',p.nombreCompleto||[p.nombre,p.apellido].filter(Boolean).join(' '),p.medio||'',p.cargo||'',p.email||'',p.telefono||'',p.localidad||'',p.listas||'',p.estado||old?.estado||'Activo',p.observaciones||old?.observaciones||'',formatDateTime_(new Date())];const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}if(n<0)sh.appendRow(item);else sh.getRange(n,1,1,CONTACT_HEADERS.length).setValues([item]);return contactRow_(item);}
 function setContactStatus_(id,status){const c=readContacts_().find(x=>x.id===id);if(!c)return null;c.estado=status;return saveContact_(c);}
 function ensureLists_(){const sh=getNamedSheet_(LISTS_SHEET,LIST_HEADERS),have=sh.getDataRange().getValues().slice(1).map(r=>String(r[1]).toLowerCase());['Prensa Florida','Radios','Televisión','Prensa escrita','Medios digitales','Medios nacionales','Institucional','Prioritarios'].forEach(n=>{if(!have.includes(n.toLowerCase()))sh.appendRow(['L-'+Utilities.getUuid().slice(0,8),n,'','Activa',formatDateTime_(new Date()),formatDateTime_(new Date())]);});}
