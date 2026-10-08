@@ -1,5 +1,6 @@
 const CONFIG = {
-  spreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
+  spreadsheetId: '',
+  contactSpreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   sheetName: 'Comunicados',
   adminKey: String.fromCharCode(73,107,51,114,50,48,50,54),
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
@@ -68,7 +69,7 @@ function contactSource_(){const sh=getSpreadsheet_().getSheetByName(CONTACT_SOUR
 function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?String(r[c]??'').trim():''};const nombre=val(['Nombre','First Name','Given Name']),apellido=val(['Apellido','Last Name','Family Name']),nombreCompleto=val(['NombreCompleto','Nombre completo','Name','Display Name'])||[nombre,apellido].filter(Boolean).join(' ');return {nombre,apellido,nombreCompleto,email:val(['Email','E-mail','Correo electrónico','Correo','Email 1 - Value','E-mail 1 - Value']),telefono:val(['Telefono','Teléfono','Phone','Mobile Phone','Phone 1 - Value']),medio:val(['Medio','Organization','Organización','Empresa','Company','Organization 1 - Name']),cargo:val(['Cargo','Title','Puesto','Organization 1 - Title']),localidad:val(['Localidad','Ciudad','City','Address 1 - City'])};}
 function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
 function readContacts_(){
-  const ss=getSpreadsheet_(),sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
+  const ss=SpreadsheetApp.openById(CONFIG.contactSpreadsheetId),sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
   if(!sh||sh.getLastRow()<2||sh.getLastColumn()<19)return [];
   const values=sh.getRange(2,19,sh.getLastRow()-1,1).getDisplayValues();
   const ms=ss.getSheetByName(MEMBERSHIPS_SHEET),map={};
