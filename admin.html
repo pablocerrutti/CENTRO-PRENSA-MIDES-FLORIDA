@@ -226,22 +226,15 @@ $("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getF
     form.dataset.authGateInstalled="1";
     form.addEventListener("submit",function(e){
       e.preventDefault();
-      e.stopImmediatePropagation();
       const value=String(input.value||"").trim();
       if(value!=="Ik3r2026"){
         if(error){error.textContent="⚠ Contraseña incorrecta.";error.style.display="block";}
         input.focus();
         return false;
       }
-      window.editorKey="Ik3r2026";
       window.editorialAuthorized=true;
       screen.classList.add("ok");
       if(error)error.style.display="none";
-      if(typeof window.load==="function")window.load();
-      if(typeof window.loadContactsModule==="function")window.loadContactsModule();
-      if(typeof window.loadMailingModule==="function")window.loadMailingModule();
-      if(typeof window.loadFuncionarios==="function")window.loadFuncionarios();
-      if(typeof window.loadAdminAgenda==="function")window.loadAdminAgenda();
       return false;
     },true);
   }
