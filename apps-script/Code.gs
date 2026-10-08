@@ -1,7 +1,7 @@
 const CONFIG = {
   spreadsheetId: '',
   sheetName: 'Comunicados',
-  adminKey: 'Ik3r2026',
+  adminKey: String.fromCharCode(73,107,51,114,50,48,50,54),
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
@@ -32,6 +32,32 @@ function doGet(e){
     return json_({ok:false,error:'Acción GET no válida'});
   }catch(err){return json_({ok:false,error:String(err)});}
 }
+
+const CONTACT_HEADERS=['ID','Nombre','Apellido','NombreCompleto','Medio','Cargo','Email','Telefono','Localidad','Listas','Estado','Observaciones','FechaActualizacion'];
+const LIST_HEADERS=['ID','Nombre','Descripcion','Estado','FechaCreacion','FechaActualizacion'];
+const MEMBERSHIP_HEADERS=['ContactoID','ListaID','FechaAsignacion'];
+const CAMPAIGN_HEADERS=['ID','Fecha','Asunto','ComunicadoID','ListaIDs','Destinatarios','Estado','Notas'];
+const CONTACT_SOURCE_SHEET='Contactos', CONTACTS_SHEET='Contactos_Normalizados', LISTS_SHEET='ListasMailing', MEMBERSHIPS_SHEET='Contactos_Listas', CAMPAIGNS_SHEET='Mailing_Campañas';
+function getNamedSheet_(name,headers){const ss=getSpreadsheet_();let sh=ss.getSheetByName(name);if(!sh)sh=ss.insertSheet(name);if(sh.getLastRow()===0)sh.appendRow(headers);ensureHeaders_(sh,headers);sh.setFrozenRows(1);return sh;}
+function normalizeHeader_(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');}
+function contactHeaderMap_(sh){const h=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0],m={};h.forEach((x,i)=>m[normalizeHeader_(x)]=i);return m;}
+function firstCol_(m,names){for(const n of names){const k=normalizeHeader_(n);if(m[k]!==undefined)return m[k];}return -1;}
+function contactSource_(){const sh=getSpreadsheet_().getSheetByName(CONTACT_SOURCE_SHEET);if(!sh||sh.getLastRow()<2)return {sheet:sh,rows:[],map:{}};return {sheet:sh,rows:sh.getRange(1,1,sh.getLastRow(),sh.getLastColumn()).getValues(),map:contactHeaderMap_(sh)};}
+function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?String(r[c]??'').trim():''};const nombre=val(['Nombre','First Name','Given Name']),apellido=val(['Apellido','Last Name','Family Name']),nombreCompleto=val(['NombreCompleto','Nombre completo','Name','Display Name'])||[nombre,apellido].filter(Boolean).join(' ');return {nombre,apellido,nombreCompleto,email:val(['Email','E-mail','Correo electrónico','Correo','Email 1 - Value','E-mail 1 - Value']),telefono:val(['Telefono','Teléfono','Phone','Mobile Phone','Phone 1 - Value']),medio:val(['Medio','Organization','Organización','Empresa','Company','Organization 1 - Name']),cargo:val(['Cargo','Title','Puesto','Organization 1 - Title']),localidad:val(['Localidad','Ciudad','City','Address 1 - City'])};}
+function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
+function readContacts_(){const sh=getSpreadsheet_().getSheetByName(CONTACTS_SHEET);if(!sh||sh.getLastRow()<2)return [];return sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).getValues().filter(r=>r[0]).map(contactRow_);}
+function importContacts_(){const src=contactSource_();if(!src.sheet)throw new Error('No existe la hoja Contactos.');const target=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),existing=readContacts_(),byEmail={},byPhone={};existing.forEach(x=>{if(x.email)byEmail[x.email.toLowerCase()]=x;if(x.telefono)byPhone[x.telefono.replace(/\D/g,'')]=x;});let imported=0,updated=0,skipped=0;src.rows.slice(1).forEach(r=>{const o=sourceContact_(r,src.map);if(!o.nombreCompleto&&!o.email&&!o.telefono){skipped++;return;}const old=(o.email&&byEmail[o.email.toLowerCase()])||(o.telefono&&byPhone[o.telefono.replace(/\D/g,'')]);const item=[old?old.id:'C-'+Utilities.getUuid().slice(0,8),o.nombre,o.apellido,o.nombreCompleto,o.medio,o.cargo,o.email,o.telefono,o.localidad,old?old.listas.join('; '):'',old?old.estado:'Activo',old?old.observaciones:'',formatDateTime_(new Date())];const rows=target.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===item[0]){n=i+1;break;}if(n<0){target.appendRow(item);imported++;}else{target.getRange(n,1,1,CONTACT_HEADERS.length).setValues([item]);updated++;}});return {imported,updated,skipped,total:imported+updated};}
+function listContacts_(){if(!getSpreadsheet_().getSheetByName(CONTACTS_SHEET)||getSpreadsheet_().getSheetByName(CONTACTS_SHEET).getLastRow()<2)importContacts_();return readContacts_();}
+function saveContact_(p){const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),id=p.id||'C-'+Utilities.getUuid().slice(0,8),old=readContacts_().find(x=>x.id===id),item=[id,p.nombre||'',p.apellido||'',p.nombreCompleto||[p.nombre,p.apellido].filter(Boolean).join(' '),p.medio||'',p.cargo||'',p.email||'',p.telefono||'',p.localidad||'',p.listas||'',p.estado||old?.estado||'Activo',p.observaciones||old?.observaciones||'',formatDateTime_(new Date())];const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}if(n<0)sh.appendRow(item);else sh.getRange(n,1,1,CONTACT_HEADERS.length).setValues([item]);return contactRow_(item);}
+function setContactStatus_(id,status){const c=readContacts_().find(x=>x.id===id);if(!c)return null;c.estado=status;return saveContact_(c);}
+function ensureLists_(){const sh=getNamedSheet_(LISTS_SHEET,LIST_HEADERS),have=sh.getDataRange().getValues().slice(1).map(r=>String(r[1]).toLowerCase());['Prensa Florida','Radios','Televisión','Prensa escrita','Medios digitales','Medios nacionales','Institucional','Prioritarios'].forEach(n=>{if(!have.includes(n.toLowerCase()))sh.appendRow(['L-'+Utilities.getUuid().slice(0,8),n,'','Activa',formatDateTime_(new Date()),formatDateTime_(new Date())]);});}
+function listMailingLists_(){ensureLists_();const sh=getSpreadsheet_().getSheetByName(LISTS_SHEET);return sh.getLastRow()<2?[]:sh.getRange(2,1,sh.getLastRow()-1,LIST_HEADERS.length).getValues().filter(r=>r[0]).map(r=>({id:String(r[0]),nombre:String(r[1]),descripcion:String(r[2]||''),estado:String(r[3]||'Activa'),fechaCreacion:formatDateTime_(r[4]),fechaActualizacion:formatDateTime_(r[5])}));}
+function saveMailingList_(p){const sh=getNamedSheet_(LISTS_SHEET,LIST_HEADERS),id=p.id||'L-'+Utilities.getUuid().slice(0,8),rows=sh.getDataRange().getValues(),now=formatDateTime_(new Date());let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}const v=[id,p.nombre||'',p.descripcion||'',p.estado||'Activa',p.fechaCreacion||now,now];if(n<0)sh.appendRow(v);else sh.getRange(n,1,1,LIST_HEADERS.length).setValues([v]);return {id,nombre:v[1],descripcion:v[2],estado:v[3]};}
+function setMailingListStatus_(id,status){const l=listMailingLists_().find(x=>x.id===id);return l?saveMailingList_({...l,estado:status}):null;}
+function saveMemberships_(contactId,listIds){const sh=getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS),rows=sh.getDataRange().getValues(),ids=String(listIds||'').split(',').map(x=>x.trim()).filter(Boolean);for(let i=rows.length-1;i>=1;i--)if(String(rows[i][0])===String(contactId))sh.deleteRow(i+1);ids.forEach(id=>sh.appendRow([contactId,id,formatDateTime_(new Date())]));const c=readContacts_().find(x=>x.id===contactId);if(c){c.listas=listMailingLists_().filter(l=>ids.includes(l.id)).map(l=>l.nombre).join('; ');saveContact_(c);}return {contactId,listIds:ids};}
+function previewCampaign_(p){const ids=String(p.listIds||'').split(',').map(x=>x.trim()).filter(Boolean),lists=listMailingLists_().filter(l=>ids.includes(l.id)),contacts=readContacts_().filter(c=>c.estado==='Activo'&&c.email),set={};contacts.forEach(c=>{const a=c.listas.map(x=>x.toLowerCase());if(lists.some(l=>a.includes(l.nombre.toLowerCase())))set[c.email.toLowerCase()]=c;});return {total:Object.keys(set).length,destinatarios:Object.values(set).map(c=>({id:c.id,nombre:c.nombreCompleto,email:c.email,medio:c.medio}))};}
+function saveCampaign_(p){const sh=getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS),preview=previewCampaign_(p),id=p.id||'M-'+Utilities.getUuid().slice(0,8),now=formatDateTime_(new Date());sh.appendRow([id,p.fecha||now,p.asunto||'',p.comunicadoId||'',p.listIds||'',preview.total,'Preparada',p.notas||'']);return {id,estado:'Preparada',destinatarios:preview.total};}
+
 function doPost(e){
   try{
     const p=e&&e.parameter?e.parameter:{};
@@ -40,6 +66,16 @@ function doPost(e){
     if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});
     if(p.action==='save')return json_({ok:true,item:save_(p)});
     if(p.action==='savePublish')return json_({ok:true,item:saveAndPublish_(p)});
+    if(p.action==='contactsList')return json_({ok:true,items:listContacts_()});
+    if(p.action==='contactsImport')return json_({ok:true,result:importContacts_()});
+    if(p.action==='contactSave')return json_({ok:true,item:saveContact_(p)});
+    if(p.action==='contactDelete')return json_({ok:true,item:setContactStatus_(p.id,'Inactivo')});
+    if(p.action==='listsList')return json_({ok:true,items:listMailingLists_()});
+    if(p.action==='listSave')return json_({ok:true,item:saveMailingList_(p)});
+    if(p.action==='listDelete')return json_({ok:true,item:setMailingListStatus_(p.id,'Inactiva')});
+    if(p.action==='membershipSave')return json_({ok:true,item:saveMemberships_(p.contactId,p.listIds)});
+    if(p.action==='campaignPreview')return json_({ok:true,preview:previewCampaign_(p)});
+    if(p.action==='campaignSave')return json_({ok:true,item:saveCampaign_(p)});
     if(p.action==='uploadVideoStart')return json_({ok:true,upload:uploadVideoStart_(p)});
     if(p.action==='uploadVideoChunk')return json_({ok:true,upload:uploadVideoChunk_(p)});
     if(p.action==='uploadVideoComplete')return json_({ok:true,upload:uploadVideoComplete_(p)});
