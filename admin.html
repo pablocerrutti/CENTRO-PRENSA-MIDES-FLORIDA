@@ -213,4 +213,40 @@ async function loadAdminAgenda(){try{const b=monthBounds(adminAgendaDate),r=awai
 window.showAdminActivity=id=>{const x=adminAgendaItems.find(a=>a.id===id);if(!x)return;const detail=$("admin-activity-detail");detail.hidden=false;detail.innerHTML='<div class="section-heading"><div><p class="eyebrow blue">DETALLE DE COBERTURA</p><h3>'+esc(x.actividad)+'</h3></div><button type="button" class="ghost" onclick="$('admin-activity-detail').hidden=true">Cerrar</button></div><div class="admin-detail-grid">'+(x.imagenUrl?'<img src="'+esc(x.imagenUrl)+'" alt="Imagen de '+esc(x.actividad)+'">':"")+'<div><p><strong>Área:</strong> <span style="color:'+esc(x.color)+'">●</span> '+esc(x.area)+'</p><p><strong>Propuesto por:</strong> '+esc(x.nombreUsuario)+'</p><p><strong>Horario:</strong> '+esc(new Date(x.inicio).toLocaleString("es-UY"))+' a '+esc(adminTime(x.fin))+'</p><p><strong>Lugar:</strong> '+esc(x.lugar)+'</p><p><strong>Descripción:</strong> '+esc(x.descripcion||"Sin información complementaria.")+'</p></div></div>';detail.scrollIntoView({behavior:"smooth",block:"center"})};
 $("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()-1,1);loadAdminAgenda()};$("admin-next-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getFullYear(),adminAgendaDate.getMonth()+1,1);loadAdminAgenda()};$("admin-today").onclick=()=>{adminAgendaDate=new Date();loadAdminAgenda()};
 </script>
+<script>
+/* Capa de acceso independiente: funciona aunque el panel editorial tenga un error JS posterior. */
+(function(){
+  function installEditorialGate(){
+    const form=document.getElementById("editor-auth-form");
+    const input=document.getElementById("editor-auth-password");
+    const screen=document.getElementById("editor-auth-screen");
+    const error=document.getElementById("editor-auth-error");
+    if(!form||!input||!screen)return;
+    if(form.dataset.authGateInstalled==="1")return;
+    form.dataset.authGateInstalled="1";
+    form.addEventListener("submit",function(e){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const value=String(input.value||"").trim();
+      if(value!=="Ik3r2026"){
+        if(error){error.textContent="⚠ Contraseña incorrecta.";error.style.display="block";}
+        input.focus();
+        return false;
+      }
+      window.editorKey="Ik3r2026";
+      window.editorialAuthorized=true;
+      screen.classList.add("ok");
+      if(error)error.style.display="none";
+      if(typeof window.load==="function")window.load();
+      if(typeof window.loadContactsModule==="function")window.loadContactsModule();
+      if(typeof window.loadMailingModule==="function")window.loadMailingModule();
+      if(typeof window.loadFuncionarios==="function")window.loadFuncionarios();
+      if(typeof window.loadAdminAgenda==="function")window.loadAdminAgenda();
+      return false;
+    },true);
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",installEditorialGate);
+  else installEditorialGate();
+})();
+</script>
 </body>
