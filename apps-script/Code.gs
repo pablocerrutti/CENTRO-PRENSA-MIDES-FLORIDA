@@ -196,7 +196,7 @@ function getMailing_(id){
 /* =========================
    AGENDA DE FUNCIONARIOS
    ========================= */
-const FUNC_HEADERS=['ID','Nombre','Area','Password','Rol','Color','Estado','FechaCreacion'];
+const FUNC_HEADERS=['ID','Nombre','Area','Password','Rol','Color','Estado','FechaCreacion','DebeCambiarPassword','FechaCambioPassword','UltimoAcceso'];
 const AGENDA_HEADERS=['ID','UsuarioID','NombreUsuario','Area','Inicio','Fin','Actividad','Lugar','Descripcion','ImagenURL','FechaCreacion','Estado'];
 const FUNC_SHEET='Funcionarios';
 const AGENDA_SHEET='AgendaFuncionarios';
@@ -217,8 +217,9 @@ function areaColor_(area,excludeId){
   return AREA_PALETTE.find(c=>!used.includes(c))||AREA_PALETTE[used.length%AREA_PALETTE.length];
 }
 function funcionarioRow_(r){
-  return {id:String(r[0]),nombre:String(r[1]||''),area:String(r[2]||''),password:String(r[3]||''),rol:String(r[4]||'Funcionario'),color:String(r[5]||AREA_PALETTE[0]),estado:String(r[6]||'Activo'),fechaCreacion:formatDateTime_(r[7])};
+ return {id:String(r[0]||''),nombre:String(r[1]||''),area:String(r[2]||''),password:String(r[3]||''),rol:String(r[4]||'Funcionario'),color:String(r[5]||AREA_PALETTE[0]),estado:String(r[6]||'Activo'),fechaCreacion:formatDateTime_(r[7])||String(r[7]||''),debeCambiarPassword:String(r[8]||'').toUpperCase()==='SI',fechaCambioPassword:formatDateTime_(r[9])||String(r[9]||''),ultimoAcceso:formatDateTime_(r[10])||String(r[10]||'')};
 }
+function ensureFuncionarioHeaders_(){const sh=getNamedSheet_(FUNC_SHEET,FUNC_HEADERS);ensureHeaders_(sh,FUNC_HEADERS);return sh;}
 function listFuncionarios_(){
   const sh=getFuncionarioSheet_();
   if(sh.getLastRow()<2)return [];
@@ -226,30 +227,29 @@ function listFuncionarios_(){
 }
 function findFuncionario_(id){return listFuncionarios_().find(x=>String(x.id)===String(id))||null;}
 function findFuncionarioByCredentials_(nombre,area,password){
-  const n=normalizeText_(nombre),a=normalizeText_(area),p=String(password||'');
-  return listFuncionarios_().find(x=>x.estado==='Activo'&&normalizeText_(x.nombre)===n&&normalizeText_(x.area)===a&&x.password===p)||null;
+ const n=normalizeText_(nombre),a=normalizeText_(area),p=String(password||'');
+ const u=listFuncionarios_().find(x=>x.estado==='Activo'&&normalizeText_(x.nombre)===n&&normalizeText_(x.area)===a&&x.password===p)||null;
+ if(u)try{const sh=ensureFuncionarioHeaders_(),rows=sh.getDataRange().getValues(),idx=rows.findIndex(r=>String(r[0])===u.id);if(idx>0)sh.getRange(idx+1,11).setValue(formatDateTime_(new Date()));}catch(_){}
+ return u;
 }
+function generateTemporaryPassword_(){return 'MIDES-'+Utilities.getUuid().replace(/-/g,'').slice(0,8).toUpperCase();}
 function saveFuncionario_(p){
-  const nombre=String(p.nombre||'').trim(),area=String(p.area||'').trim(),rol=String(p.rol||'Funcionario').trim();
-  if(!nombre||!area)throw new Error('Nombre y área son obligatorios.');
-  if(!['Funcionario','Director Departamental','Jefa Departamental'].includes(rol))throw new Error('Rol no válido.');
-  const sh=getFuncionarioSheet_(),id=p.id||'F-'+Utilities.getUuid().slice(0,8).toUpperCase(),old=findFuncionario_(id),color=old?.color||areaColor_(area,id),password=old?.password||makeFuncionarioPassword_(nombre,area,id),now=formatDateTime_(new Date());
-  const row=[id,nombre,area,password,rol,color,p.estado||old?.estado||'Activo',old?.fechaCreacion||now];
-  const rows=sh.getDataRange().getValues();let n=-1;
-  for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
-  if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,FUNC_HEADERS.length).setValues([row]);
-
-  // Confirmación real de persistencia: no respondemos "guardado" hasta que
-  // Google Sheets haya confirmado la escritura y podamos leer nuevamente la fila.
-  SpreadsheetApp.flush();
-  const verifyRows=sh.getDataRange().getValues();
-  const verify=verifyRows.find(r=>String(r[0])===id);
-  if(!verify)throw new Error('El funcionario fue enviado pero Google Sheets no confirmó la escritura. No se informará como guardado.');
-  const persisted=funcionarioRow_(verify);
-  if(persisted.id!==id || persisted.nombre!==nombre || persisted.area!==area){
-    throw new Error('Google Sheets devolvió una fila distinta a la esperada. No se confirmó el alta.');
-  }
-  return persisted;
+ const nombre=String(p.nombre||'').trim(),area=String(p.area||'').trim(),provisional=String(p.passwordProvisoria||'').trim()||generateTemporaryPassword_();
+ if(!nombre||!area)throw new Error('Nombre y área de trabajo son obligatorios.');
+ if(provisional.length<8)throw new Error('La contraseña provisoria debe tener al menos 8 caracteres.');
+ const sh=ensureFuncionarioHeaders_(),id=p.id||'F-'+Utilities.getUuid().slice(0,8).toUpperCase(),old=findFuncionario_(id),color=old?.color||areaColor_(area,id),now=formatDateTime_(new Date());
+ const row=[id,nombre,area,provisional,'Funcionario',color,p.estado||old?.estado||'Activo',old?.fechaCreacion||now,old?.debeCambiarPassword===false?'NO':'SI',old?.fechaCambioPassword||'',old?.ultimoAcceso||''];
+ const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
+ if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,FUNC_HEADERS.length).setValues([row]);
+ SpreadsheetApp.flush();const verify=sh.getDataRange().getValues().find(r=>String(r[0])===id);if(!verify)throw new Error('Google Sheets no confirmó la escritura del usuario.');
+ return funcionarioRow_(verify);
+}
+function changeFuncionarioPassword_(p){
+ const nombre=String(p.nombre||'').trim(),area=String(p.area||'').trim(),oldPass=String(p.passwordActual||''),newPass=String(p.passwordNueva||'').trim();
+ if(newPass.length<8)throw new Error('La nueva contraseña debe tener al menos 8 caracteres.');if(oldPass===newPass)throw new Error('La nueva contraseña debe ser diferente a la provisoria.');
+ const u=findFuncionarioByCredentials_(nombre,area,oldPass);if(!u)throw new Error('La contraseña actual no es válida.');
+ const sh=ensureFuncionarioHeaders_(),rows=sh.getDataRange().getValues(),idx=rows.findIndex(r=>String(r[0])===u.id);if(idx<1)throw new Error('Usuario no encontrado.');
+ rows[idx][3]=newPass;rows[idx][8]='NO';rows[idx][9]=formatDateTime_(new Date());sh.getRange(idx+1,1,1,FUNC_HEADERS.length).setValues([rows[idx]]);SpreadsheetApp.flush();return funcionarioRow_(sh.getRange(idx+1,1,1,FUNC_HEADERS.length).getValues()[0]);
 }
 function deleteFuncionario_(id){
   const sh=getFuncionarioSheet_(),rows=sh.getDataRange().getValues();
@@ -309,6 +309,7 @@ function doPost(e){
   try{
     const p=e&&e.parameter?e.parameter:{};
     if(p.action==='funcionarioLogin'){const u=findFuncionarioByCredentials_(p.nombre||'',p.area||'',p.password||'');return json_({ok:!!u,user:u||null,error:u?null:'Credenciales de funcionario incorrectas'});}
+    if(p.action==='funcionarioChangePassword'){const u=changeFuncionarioPassword_(p);return json_({ok:true,user:u,message:'Contraseña actualizada correctamente.'});}
     if(p.action==='agendaList'){validateFuncionario_(p);return json_({ok:true,items:listAgenda_(p.from,p.to)});}
     if(p.action==='agendaSave'){const r=saveAgenda_(p);return json_({ok:true,...r});}
     if(p.action==='agendaUploadImage'){return json_({ok:true,image:uploadAgendaImage_(p)});}
