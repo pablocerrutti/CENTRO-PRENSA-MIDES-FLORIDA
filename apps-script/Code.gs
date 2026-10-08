@@ -219,11 +219,13 @@ function agendaRow_(r){
   return {id:String(r[0]),usuarioId:String(r[1]),nombreUsuario:String(r[2]||''),area:String(r[3]||''),inicio:String(r[4]||''),fin:String(r[5]||''),actividad:String(r[6]||''),lugar:String(r[7]||''),descripcion:String(r[8]||''),imagenUrl:String(r[9]||''),fechaCreacion:String(r[10]||''),estado:String(r[11]||'Activa'),color:areaColor_(String(r[3]||''))};
 }
 function listAgenda_(from,to){
+  const cache=CacheService.getScriptCache(),cacheKey='agenda_'+Utilities.base64EncodeWebSafe(String(from||'')+'|'+String(to||''));
+  const cached=cache.get(cacheKey);if(cached)try{return JSON.parse(cached);}catch(_){}
   const sh=getAgendaSheet_();if(sh.getLastRow()<2)return [];
   const lo=from?parseAgendaDate_(from):new Date(0),hi=to?parseAgendaDate_(to):new Date('2999-12-31T23:59:59');
-  return sh.getRange(2,1,sh.getLastRow()-1,AGENDA_HEADERS.length).getValues().filter(r=>r[0]&&String(r[11]||'Activa')==='Activa').map(agendaRow_).filter(x=>{
-    const s=parseAgendaDate_(x.inicio),f=parseAgendaDate_(x.fin);return f>=lo&&s<=hi;
-  });
+  const result=sh.getRange(2,1,sh.getLastRow()-1,AGENDA_HEADERS.length).getValues().filter(r=>r[0]&&String(r[11]||'Activa')==='Activa').map(agendaRow_).filter(x=>{const s=parseAgendaDate_(x.inicio),f=parseAgendaDate_(x.fin);return f>=lo&&s<=hi;});
+  try{cache.put(cacheKey,JSON.stringify(result),30);}catch(_){}
+  return result;
 }
 function agendaConflict_(inicio,fin,excludeId){
   const s=parseAgendaDate_(inicio),f=parseAgendaDate_(fin);
@@ -240,6 +242,7 @@ function saveAgenda_(p){
   const row=[id,u.id,u.nombre,u.area,inicio,fin,actividad,lugar,descripcion,String(p.imagenUrl||''),now,'Activa'];
   const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
   if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,AGENDA_HEADERS.length).setValues([row]);
+  try{CacheService.getScriptCache().removeAll([]);}catch(_){}
   const item=agendaRow_(row);
   return {item,conflict:conflict?agendaRow_(conflict):null,message:conflict?'La actividad fue registrada, pero existe una actividad paralela en el mismo horario. Queda a criterio de la Dirección definir la prioridad.':'Actividad creada correctamente.'};
 }
@@ -300,7 +303,9 @@ function doPost(e){
   }catch(err){return json_({ok:false,error:String(err)});}
 }
 function listPublished_(){return readAll_().filter(x=>String(x.estado||'').trim().toLowerCase()==='publicado').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));}
-function readAll_(){const v=getSheet_().getDataRange().getValues();return v.length<2?[]:v.slice(1).filter(r=>r[0]).map(rowToObject_);}
+function readAll_(){const cache=CacheService.getScriptCache(),cached=cache.get('centro_prensa_comunicados');if(cached)try{return JSON.parse(cached);}catch(_){}const v=getSheet_().getDataRange().getValues();const items=v.length<2?[]:v.slice(1).filter(r=>r[0]).map(rowToObject_);try{cache.put('centro_prensa_comunicados',JSON.stringify(items),60);}catch(_){}return items;}
+function invalidateEditorialCache_(){try{CacheService.getScriptCache().remove('centro_prensa_comunicados');}catch(_){}}
+
 function rowToObject_(r){
   return {id:String(r[0]),estado:String(r[1]||'').trim(),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15]),audioUrl:String(r[16]||''),audioDriveFileId:String(r[17]||''),audioDriveUrl:String(r[18]||'')};
 }
@@ -313,6 +318,7 @@ function save_(p){
   const values=sh.getDataRange().getValues();let n=-1;
   for(let i=1;i<values.length;i++)if(String(values[i][0])===id){n=i+1;break;}
   if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,row.length).setValues([row]);
+  invalidateEditorialCache_();
   return item;
 }
 function uploadVideoStart_(p){
