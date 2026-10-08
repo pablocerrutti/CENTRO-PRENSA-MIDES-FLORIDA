@@ -294,6 +294,7 @@ function doPost(e){
     if(p.action==='funcionarioSave')return json_({ok:true,item:saveFuncionario_(p)});
     if(p.action==='funcionarioDelete')return json_({ok:true,item:deleteFuncionario_(p.id)});
     if(p.action==='adminAgendaList')return json_({ok:true,items:adminCalendar_(p)});
+    if(p.action==='diagnosticoHojas')return json_({ok:true,items:diagnosticoHojasCentroPrensa_()});
     if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});
     if(p.action==='save')return json_({ok:true,item:save_(p)});
     if(p.action==='savePublish')return json_({ok:true,item:saveAndPublish_(p)});
