@@ -2,9 +2,9 @@ const CONFIG = {
   spreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   contactSpreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   sheetName: 'Comunicados',
-  // Contraseña única del Panel Editorial: Ik3r2026
-  // Se almacena únicamente como SHA-256.
-  adminKeyHash: 'db53bd89937e9f02a479955637147321c18ce67f1247323fb0699ced91c671e6',
+  // Contraseña única y directa del Panel Editorial.
+  // NO se cifra ni se transforma: debe ser exactamente Ik3r2026.
+  adminKey: 'Ik3r2026',
   driveRootFolderId: '1bgzF1n5ufGlIQ84ykL90pAnJqvoWL2ET'
 };
 
@@ -264,7 +264,8 @@ function doPost(e){
     if(p.action==='agendaSave'){const r=saveAgenda_(p);return json_({ok:true,...r});}
     if(p.action==='agendaUploadImage'){return json_({ok:true,image:uploadAgendaImage_(p)});}
     if(p.action==='agendaDeleteOwn'){const u=validateFuncionario_(p),sh=getAgendaSheet_(),rows=sh.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(p.id)&&String(rows[i][1])===u.id){sh.getRange(i+1,12).setValue('Inactiva');return json_({ok:true});}return json_({ok:false,error:'Actividad no encontrada'});}
-    if(sha256Hex_(p.key||'')!==CONFIG.adminKeyHash)return json_({ok:false,error:'Clave editorial incorrecta'});
+    // Acceso editorial directo: únicamente la clave exacta Ik3r2026.
+    if(String(p.key||'')!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
     if(p.action==='adminList')return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});
     if(p.action==='funcionariosList')return json_({ok:true,items:listFuncionarios_()});
     if(p.action==='funcionarioSave')return json_({ok:true,item:saveFuncionario_(p)});
