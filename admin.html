@@ -34,9 +34,9 @@
 <div class="dashboard-grid">
 <article class="dashboard-card"><span class="icon">02</span><h2>Multimedia</h2><p>Fotografías, videos y documentos asociados a cada actividad.</p><button type="button" onclick="showNotice('La carga multimedia está disponible dentro de cada comunicado')">Abrir biblioteca</button></article>
 <article class="dashboard-card"><span class="icon">03</span><h2>Medios</h2><p>Agenda de contactos y grupos de distribución.</p><button type="button" onclick="showNotice('Gestión de medios: siguiente módulo')">Gestionar medios</button></article>
-<article class="dashboard-card"><span class="icon">04</span><h2>Mailing</h2><p>Preparar y enviar campañas a listas de prensa.</p><button type="button" onclick="showNotice('Mailing: siguiente módulo')">Nueva campaña</button></article>
+<article class="dashboard-card"><span class="icon">04</span><h2>Mailing</h2><p>Preparar y enviar campañas a listas de prensa.</p><button type="button" onclick="showNotice('Mailing: siguiente módulo')">Nueva campaña</button></article><article class="dashboard-card"><span class="icon">05</span><h2>Agenda de funcionarios</h2><p>Calendario compartido para coordinar actividades y coberturas de prensa.</p><a class="button button-light" style="background:var(--mides-blue);color:#fff" href="funcionarios.html">Abrir agenda</a></article>
 </div>
-<section class="status-panel"><div><strong>Base editorial</strong><span>Google Sheets + Apps Script</span></div><div><strong>Estado</strong><span id="api-status" class="status">Configurando API</span></div></section>
+<section class="status-panel"><div><strong>Base editorial</strong><span>Google Sheets + Apps Script</span></div><div><strong>Estado</strong><span id="api-status" class="status">Configurando API</span></div><div><strong>Agenda</strong><a href="funcionarios.html" style="display:inline-block;margin-top:5px;color:var(--mides-blue);font-weight:800;text-decoration:none">Abrir agenda</a></div></section>
 
 <section class="editor-card" id="contactos-module">
 <div class="section-heading"><div><p class="eyebrow">AGENDA DE MEDIOS</p><h2>Contactos</h2><p class="module-help">Lectura directa de la hoja <strong>Contactos</strong>. Se muestran únicamente las columnas que tienen datos en cada contacto.</p></div><span id="contacts-count" class="status">0</span></div>
@@ -57,6 +57,17 @@
 <div id="campaign-preview" class="campaign-preview">Seleccioná listas y artículos.</div>
 <div id="mailing-result" class="campaign-preview" hidden><strong>Mailing generado</strong><br><a id="mailing-link" target="_blank" rel="noopener">Abrir mailing</a><br><a id="whatsapp-link" target="_blank" rel="noopener">Compartir por WhatsApp</a></div></div>
 </div>
+</section>
+<section class="editor-card" id="funcionarios-module">
+<div class="section-heading"><div><p class="eyebrow">GESTIÓN DE ACCESOS</p><h2>Funcionarios y roles</h2><p class="module-help">Usuarios de la agenda de actividades. La clave se genera automáticamente como Nombre+Área+ID único.</p></div><span id="func-count" class="status">0 usuarios</span></div>
+<div class="form-grid">
+<label>Nombre<input id="func-name" placeholder="Nombre y apellido"></label>
+<label>Área<input id="func-area" placeholder="Área / unidad"></label>
+<label>Rol<select id="func-role"><option>Funcionario</option><option>Director Departamental</option><option>Jefa Departamental</option></select></label>
+</div>
+<div class="form-actions"><button type="button" id="func-add">Agregar funcionario</button></div>
+<div id="func-list" class="draft-list"><p class="empty-state">Cargando funcionarios…</p></div>
+</section>
 </section>
 <div id="list-modal" class="modal" hidden><div class="modal-card"><div class="section-heading"><h2>Asignar contactos a lista</h2><button type="button" class="ghost" onclick="closeListModal()">Cerrar</button></div><p id="assignment-summary" class="module-help">Seleccioná una lista existente o creá una nueva.</p><label class="modal-label">Lista existente<select id="assignment-list"><option value="">Seleccionar…</option></select></label><div class="modal-label"><strong>O crear nueva lista</strong><input id="assignment-new-name" placeholder="Ej.: Radios de Florida"></div><label class="modal-label">Descripción<textarea id="assignment-new-description" rows="2" placeholder="Descripción opcional"></textarea></label><div class="form-actions"><button type="button" id="save-assignment-btn" class="secondary">Asignar seleccionados</button></div></div></div></main>
 <div id="notice" class="toast" hidden></div>
@@ -148,5 +159,11 @@ $("save-campaign-btn").onclick=async()=>{try{await generateMailing();showNotice(
 $("send-mailing-btn").onclick=async()=>{try{const item=await generateMailing();if(!confirm("¿Enviar ahora el mailing a "+item.destinatarios+" destinatarios?"))return;const sent=await post("mailingSend",{id:item.id});showNotice("✓ Mailing enviado: "+sent.result.sent+" destinatarios.","success")}catch(e){showNotice("⚠ No se pudo enviar: "+e.message,"error")}};
 $("new-list-btn").onclick=()=>{$("list-id").value="";$("list-name").value="";$("list-description").value="";$("list-modal").hidden=false};
 loadContactsModule();loadMailingModule();
+let funcionarios=[];
+async function loadFuncionarios(){try{const r=await post("funcionariosList");funcionarios=r.items||[];renderFuncionarios()}catch(e){$("func-list").innerHTML='<p class="empty-state">⚠ '+esc(e.message)+'</p>'}}
+function renderFuncionarios(){$("func-count").textContent=funcionarios.filter(x=>x.estado==="Activo").length+" activos";$("func-list").innerHTML=funcionarios.length?funcionarios.map(x=>'<article class="draft-item"><div><span class="draft-meta">'+esc(x.rol)+' · '+esc(x.area)+'</span><h3>'+esc(x.nombre)+'</h3><p><strong>Clave:</strong> '+esc(x.password)+' · <span style="color:'+esc(x.color)+'">●</span> color de área</p></div><div class="draft-actions"><button type="button" class="ghost" onclick="deleteFuncionario(\''+esc(x.id)+'\')">'+(x.estado==="Activo"?"Desactivar":"Inactivo")+'</button></div></article>').join(""):'<p class="empty-state">No hay funcionarios registrados.</p>'}
+$("func-add").onclick=async()=>{try{const nombre=$("func-name").value.trim(),area=$("func-area").value.trim(),rol=$("func-role").value;if(!nombre||!area)throw new Error("Completá nombre y área.");const r=await post("funcionarioSave",{nombre,area,rol});$("func-name").value="";$("func-area").value="";showNotice("✓ Funcionario creado. Clave generada: "+r.item.password,"success");await loadFuncionarios()}catch(e){showNotice("⚠ "+e.message,"error")}};
+window.deleteFuncionario=async id=>{if(!confirm("¿Desactivar este funcionario?"))return;try{await post("funcionarioDelete",{id});showNotice("✓ Funcionario desactivado.","success");await loadFuncionarios()}catch(e){showNotice("⚠ "+e.message,"error")}};
+loadFuncionarios();
 </script>
 </body>
