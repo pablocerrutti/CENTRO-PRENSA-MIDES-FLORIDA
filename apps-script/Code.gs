@@ -1,5 +1,5 @@
 const CONFIG = {
-  spreadsheetId: '',
+  spreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   contactSpreadsheetId: '113AiF1ahuZuEW9PWeHNhJYdJXMidZd084LmYOx7N6NU',
   sheetName: 'Comunicados',
   adminKey: String.fromCharCode(73,107,51,114,50,48,50,54),
@@ -24,11 +24,20 @@ function ensureHeaders_(sh,headers){
   const current=sh.getLastColumn()?sh.getRange(1,1,1,Math.max(sh.getLastColumn(),headers.length)).getValues()[0]:[];
   headers.forEach((h,i)=>{if(current[i]!==h)sh.getRange(1,i+1).setValue(h);});
 }
+function prepararHojasCentroPrensa_(){
+  // Crea/normaliza todas las hojas persistentes del Centro de Prensa.
+  getSheet_();
+  ensureContactsStructure_();
+  getFuncionarioSheet_();
+  getAgendaSheet_();
+}
+
 function autorizarCentroPrensa(){
   // Ejecutar manualmente una vez desde el editor de Apps Script con la cuenta propietaria.
   // Esto fuerza la solicitud de permisos de Sheets + Drive antes de usar el Web App.
   const ss=getSpreadsheet_();
   if(!ss)throw new Error('No se pudo acceder a la hoja de cálculo.');
+  prepararHojasCentroPrensa_();
   const root=getDriveRoot_();
   root.getName();
   if(CONFIG.driveRootFolderId){
@@ -42,7 +51,7 @@ function autorizarCentroPrensa(){
   return 'Autorización de Google Sheets, Drive y solicitudes externas completada correctamente.';
 }
 
-function setup(){const sh=getSheet_();sh.getRange(1,1,1,HEADERS.length).setValues([HEADERS]);sh.setFrozenRows(1);return json_({ok:true,sheet:sh.getName(),headers:HEADERS});}
+function setup(){prepararHojasCentroPrensa_();const sh=getSheet_();sh.getRange(1,1,1,HEADERS.length).setValues([HEADERS]);sh.setFrozenRows(1);return json_({ok:true,sheets:[CONFIG.sheetName,CONTACT_SOURCE_SHEET,CONTACTS_SHEET,LISTS_SHEET,MEMBERSHIPS_SHEET,CAMPAIGNS_SHEET,'Mailings',FUNC_SHEET,AGENDA_SHEET]});}
 function doGet(e){
   try{
     const a=(e&&e.parameter&&e.parameter.action)||'list';
