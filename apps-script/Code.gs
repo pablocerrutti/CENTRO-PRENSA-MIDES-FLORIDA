@@ -122,6 +122,21 @@ function saveMailing_(p){
  const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break}if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,row.length).setValues([row]);
  return{id,fecha:row[1],asunto:row[2],listIds:row[3],comunicadoIds:row[4],destinatarios:preview.total,estado:row[6],publicUrl,whatsappUrl:whats};
 }
+function sendMailing_(id){
+  const mailing=getMailing_(id);if(!mailing)throw new Error('No se encontró el mailing.');
+  const preview=previewCampaign_({listIds:mailing.listaIds.join(',')});
+  const emails=preview.destinatarios.map(x=>String(x.email||'').trim().toLowerCase()).filter(x=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
+  if(!emails.length)throw new Error('No hay destinatarios con correo válido en las listas seleccionadas.');
+  const quota=MailApp.getRemainingDailyQuota();if(emails.length>quota)throw new Error('La cuota diaria de correo disponible ('+quota+') no alcanza para '+emails.length+' destinatarios.');
+  const rows=mailing.items.map(x=>'<article style="margin:0 0 24px;padding:18px;border:1px solid #dce3e7;border-radius:10px"><h2 style="margin:0 0 8px">'+escapeHtml_(x.titulo)+'</h2><p style="margin:0 0 10px">'+escapeHtml_(x.resumen||'')+'</p><a href="'+escapeAttr_(mailing.publicUrl||'')+'" style="font-weight:700">Ver mailing institucional</a></article>').join('');
+  const html='<div style="font-family:Arial,sans-serif;max-width:720px;margin:auto"><h1>MIDES Florida</h1><h2>'+escapeHtml_(mailing.asunto)+'</h2>'+rows+'<p><a href="'+escapeAttr_(mailing.publicUrl||'')+'">Abrir mailing institucional completo</a></p></div>';
+  const body=mailing.asunto+'\n\n'+mailing.items.map(x=>x.titulo).join('\n')+'\n\n'+(mailing.publicUrl||'');
+  const to=Session.getEffectiveUser().getEmail()||emails[0],bcc=emails.join(',');
+  MailApp.sendEmail({to, bcc, subject:mailing.asunto, body, htmlBody:html, name:'MIDES Florida'});
+  return {sent:emails.length,id};
+}
+function escapeHtml_(v){return String(v??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function escapeAttr_(v){return escapeHtml_(v).replace(/'/g,'&#39;')}
 function getMailing_(id){
  if(!id)return null;const sh=getMailingSheet_();if(sh.getLastRow()<2)return null;
  const r=sh.getRange(2,1,sh.getLastRow()-1,MAILING_HEADERS.length).getValues().find(x=>String(x[0])===String(id));if(!r)return null;
@@ -149,6 +164,7 @@ function doPost(e){
     if(p.action==='campaignPreview')return json_({ok:true,preview:previewCampaign_(p)});
     if(p.action==='campaignSave')return json_({ok:true,item:saveCampaign_(p)});
     if(p.action==='mailingSave')return json_({ok:true,item:saveMailing_(p)});
+    if(p.action==='mailingSend')return json_({ok:true,result:sendMailing_(p.id)});
     if(p.action==='uploadVideoStart')return json_({ok:true,upload:uploadVideoStart_(p)});
     if(p.action==='uploadVideoChunk')return json_({ok:true,upload:uploadVideoChunk_(p)});
     if(p.action==='uploadVideoComplete')return json_({ok:true,upload:uploadVideoComplete_(p)});
