@@ -39,12 +39,13 @@ function doPost(e){
     if(p.action==='adminList')return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});
     if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});
     if(p.action==='save')return json_({ok:true,item:save_(p)});
+    if(p.action==='savePublish')return json_({ok:true,item:saveAndPublish_(p)});
     if(p.action==='uploadVideoStart')return json_({ok:true,upload:uploadVideoStart_(p)});
     if(p.action==='uploadVideoChunk')return json_({ok:true,upload:uploadVideoChunk_(p)});
     if(p.action==='uploadVideoComplete')return json_({ok:true,upload:uploadVideoComplete_(p)});
     if(p.action==='uploadImages')return json_({ok:true,images:uploadImages_(p)});
     if(p.action==='delete')return json_({ok:delete_(p.id)});
-    if(p.action==='publish')return json_({ok:setStatus_(p.id,'Publicado'),item:findById_(p.id)});
+    if(p.action==='publish'){const item=setStatus_(p.id,'Publicado');return json_({ok:!!item,item:item,error:item?null:'No se encontró el comunicado para publicar.'});}
     if(p.action==='unpublish')return json_({ok:setStatus_(p.id,'Borrador'),item:findById_(p.id)});
     return json_({ok:false,error:'Acción POST no válida'});
   }catch(err){return json_({ok:false,error:String(err)});}
@@ -55,7 +56,7 @@ function rowToObject_(r){
   return {id:String(r[0]),estado:String(r[1]),fecha:formatDate_(r[2]),categoria:String(r[3]),tag:String(r[4]),titulo:String(r[5]),resumen:String(r[6]),contenido:String(r[7]),fotoPrincipal:String(r[8]||''),fotos:splitPhotos_(r[9]),videoUrl:String(r[10]||''),videoDriveFileId:String(r[11]||''),videoDriveUrl:String(r[12]||''),videoDriveFolderId:String(r[13]||''),fechaCreacion:formatDateTime_(r[14]),fechaActualizacion:formatDateTime_(r[15])};
 }
 function splitPhotos_(v){return String(v||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);}
-function findById_(id){return id?readAll_().find(x=>x.id===String(id))||null:null;}
+function findById_(id){if(!id)return null;const sh=getSheet_(),row=findRow_(sh,id);return row<0?null:rowToObject_(sh.getRange(row,1,1,HEADERS.length).getValues()[0]);}
 function save_(p){
   const sh=getSheet_(),id=p.id||Utilities.getUuid(),now=new Date(),old=findById_(id);
   const item={id:id,estado:old?old.estado:'Borrador',fecha:p.fecha||'',categoria:p.categoria||'Comunicado',tag:p.tag||'',titulo:p.titulo||'',resumen:p.resumen||'',contenido:p.contenido||'',fotoPrincipal:p.fotoPrincipal||'',fotos:splitPhotos_(p.fotos),videoUrl:p.videoUrl||'',videoDriveFileId:old?.videoDriveFileId||'',videoDriveUrl:old?.videoDriveUrl||'',videoDriveFolderId:old?.videoDriveFolderId||'',fechaCreacion:old&&old.fechaCreacion?old.fechaCreacion:formatDateTime_(now),fechaActualizacion:formatDateTime_(now)};
@@ -122,7 +123,8 @@ function getOrCreateFolder_(parent,name){const it=parent.getFoldersByName(name);
 function getOrCreateCommunicationFolder_(parent,title){return getOrCreateFolder_(parent,safeFolderName_(title));}
 function safeFolderName_(name){return String(name).replace(/[\\/:*?"<>|#%{}~&]/g,' ').replace(/\s+/g,' ').trim().slice(0,150)||'Comunicado';}
 function findRow_(sh,id){const v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id))return i+1;return -1;}
-function setStatus_(id,status){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,16).setValue(formatDateTime_(new Date()));return true;}return false;}
+function setStatus_(id,status){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){const now=formatDateTime_(new Date());sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,16).setValue(now);return rowToObject_(sh.getRange(i+1,1,1,HEADERS.length).getValues()[0]);}return null;}
+function saveAndPublish_(p){const item=save_(p);const sh=getSheet_(),row=findRow_(sh,item.id);if(row<0)throw new Error('No se encontró el comunicado recién guardado.');const now=formatDateTime_(new Date());sh.getRange(row,2).setValue('Publicado');sh.getRange(row,16).setValue(now);return rowToObject_(sh.getRange(row,1,1,HEADERS.length).getValues()[0]);}
 function delete_(id){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.deleteRow(i+1);return true;}return false;}
 function formatDate_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd');return String(v);}
 function formatDateTime_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');return String(v);}
