@@ -40,9 +40,13 @@
 <section class="status-panel"><div><strong>Base editorial</strong><span>Google Sheets + Apps Script</span></div><div><strong>Estado</strong><span id="api-status" class="status">Configurando API</span></div></section>
 
 <section class="editor-card" id="contactos-module">
-<div class="section-heading"><div><p class="eyebrow">AGENDA DE MEDIOS</p><h2>Contactos</h2><p class="module-help">Agenda operativa derivada de la hoja Contactos. La importación original no se modifica.</p></div><span id="contacts-count" class="status">0</span></div>
-<div class="module-toolbar"><input id="contact-search" placeholder="Buscar por nombre, medio o email"><button type="button" id="import-contacts-btn">Actualizar agenda</button><button type="button" class="ghost" id="new-contact-btn">Nuevo contacto</button></div>
-<div id="contacts-list" class="contacts-list"><p class="empty-state">Cargando contactos…</p></div>
+<div class="section-heading"><div><p class="eyebrow">AGENDA DE MEDIOS</p><h2>Contactos</h2><p class="module-help">Lectura directa de la hoja <strong>Contactos</strong>. Se muestran únicamente las columnas que tienen datos en cada contacto.</p></div><span id="contacts-count" class="status">0</span></div>
+<div class="module-toolbar">
+  <span id="contacts-selected" class="status">0 seleccionados</span>
+  <button type="button" id="select-all-contacts">Seleccionar todos</button>
+  <button type="button" class="secondary" id="assign-selected-btn">Asignar seleccionados a una lista</button>
+</div>
+<div id="contacts-list" class="contacts-list"><p class="empty-state">Leyendo hoja Contactos…</p></div>
 </section>
 <section class="editor-card" id="mailing-module">
 <div class="section-heading"><div><p class="eyebrow">DISTRIBUCIÓN</p><h2>Mailing</h2><p class="module-help">Preparación de campañas y selección de listas. El sistema todavía no envía correos automáticamente.</p></div><span id="mailing-count" class="status">0 listas</span></div>
@@ -51,9 +55,7 @@
 <div class="campaign-box"><h3>Nueva campaña</h3><label>Asunto<input id="campaign-subject" placeholder="Asunto del envío"></label><label>Comunicado<select id="campaign-content"><option value="">Sin comunicado</option></select></label><label>Notas<textarea id="campaign-notes" rows="4" placeholder="Notas internas"></textarea></label><button type="button" id="preview-campaign-btn">Calcular destinatarios</button><div id="campaign-preview" class="campaign-preview">Seleccioná una o más listas.</div><button type="button" id="save-campaign-btn" class="secondary">Guardar campaña preparada</button></div>
 </div>
 </section>
-<div id="contact-modal" class="modal" hidden><div class="modal-card"><div class="section-heading"><h2 id="contact-modal-title">Nuevo contacto</h2><button type="button" class="ghost" onclick="closeContactModal()">Cerrar</button></div><input type="hidden" id="contact-id"><div class="form-grid contact-form-grid"><label>Nombre<input id="contact-name"></label><label>Apellido<input id="contact-last"></label><label class="full">Nombre completo<input id="contact-full"></label><label>Medio / institución<input id="contact-media"></label><label>Cargo<input id="contact-role"></label><label>Email<input id="contact-email" type="email"></label><label>Teléfono<input id="contact-phone"></label><label>Localidad<input id="contact-city"></label><label>Estado<select id="contact-state"><option>Activo</option><option>Inactivo</option></select></label><label class="full">Listas de mailing<div id="contact-list-membership" class="membership-box">Cargando listas…</div></label><label class="full">Observaciones<textarea id="contact-notes" rows="3"></textarea></label></div><div class="form-actions"><button type="button" id="save-contact-btn">Guardar contacto</button></div></div></div>
-<div id="list-modal" class="modal" hidden><div class="modal-card"><div class="section-heading"><h2>Nueva lista</h2><button type="button" class="ghost" onclick="closeListModal()">Cerrar</button></div><input type="hidden" id="list-id"><label class="modal-label">Nombre<input id="list-name"></label><label class="modal-label">Descripción<textarea id="list-description" rows="3"></textarea></label><div class="form-actions"><button type="button" id="save-list-btn">Guardar lista</button></div></div></div>
-</main>
+<div id="list-modal" class="modal" hidden><div class="modal-card"><div class="section-heading"><h2>Asignar contactos a lista</h2><button type="button" class="ghost" onclick="closeListModal()">Cerrar</button></div><p id="assignment-summary" class="module-help">Seleccioná una lista existente o creá una nueva.</p><label class="modal-label">Lista existente<select id="assignment-list"><option value="">Seleccionar…</option></select></label><div class="modal-label"><strong>O crear nueva lista</strong><input id="assignment-new-name" placeholder="Ej.: Radios de Florida"></div><label class="modal-label">Descripción<textarea id="assignment-new-description" rows="2" placeholder="Descripción opcional"></textarea></label><div class="form-actions"><button type="button" id="save-assignment-btn" class="secondary">Asignar seleccionados</button></div></div></div></main>
 <div id="notice" class="toast" hidden></div>
 <script src="config.js"></script>
 <script>
@@ -123,49 +125,69 @@ $("publish-btn").addEventListener("click",async()=>{const btn=$("publish-btn");t
 $("clear-btn").addEventListener("click",reset);
 load();
 </script><script>
-let contacts=[],mailLists=[],campaignPreview=null;
+let contacts=[],mailLists=[],campaignPreview=null,selectedContactIds=new Set();
 async function loadContactsModule(){
   try{
     const r=await post("contactsList");
     contacts=r.items||[];
+    selectedContactIds=new Set([...selectedContactIds].filter(id=>contacts.some(c=>c.id===id)));
     renderContacts();
   }catch(e){
-    $("contacts-list").innerHTML='<p class="empty-state">⚠ No se pudo cargar la agenda: '+esc(e.message)+'</p>';
-    showNotice("⚠ No se pudo cargar la agenda: "+e.message,"error");
+    $("contacts-list").innerHTML='<p class="empty-state">⚠ No se pudo leer la hoja Contactos: '+esc(e.message)+'</p>';
+    showNotice("⚠ No se pudo leer la hoja Contactos: "+e.message,"error");
   }
 }
 function renderContacts(){
-  const q=($("contact-search").value||"").toLowerCase();
-  const arr=contacts.filter(c=>[c.nombreCompleto,c.medio,c.email,c.localidad].join(" ").toLowerCase().includes(q));
-  $("contacts-count").textContent=arr.length+" contactos";
-  $("contacts-list").innerHTML=arr.length?arr.map(c=>{
-    const estado=c.estado==="Activo"?"active":"inactive";
-    const accion=c.estado==="Activo"?"Desactivar":"Activar";
-    return '<article class="contact-row"><div><strong>'+esc(c.nombreCompleto||"Sin nombre")+'</strong><span>'+esc(c.medio||"Sin medio")+(c.cargo?" · "+esc(c.cargo):"")+'</span><small>'+esc(c.email||"Sin email")+(c.telefono?" · "+esc(c.telefono):"")+'</small></div><div class="contact-actions"><span class="contact-state '+estado+'">'+esc(c.estado)+'</span><button type="button" onclick="editContact(\''+esc(c.id)+'\')">Editar</button><button type="button" class="ghost" onclick="toggleContact(\''+esc(c.id)+'\')">'+accion+'</button></div></article>';
-  }).join(""):'<p class="empty-state">No hay contactos que coincidan.</p>';
+  $("contacts-count").textContent=contacts.length+" contactos";
+  $("contacts-selected").textContent=selectedContactIds.size+" seleccionados";
+  $("contacts-list").innerHTML=contacts.length?contacts.map(c=>{
+    const campos=(c.campos||[]).map(x=>'<div class="contact-field"><span>'+esc(x.columna)+'</span><strong>'+esc(x.valor)+'</strong></div>').join("");
+    const checked=selectedContactIds.has(c.id)?" checked":"";
+    const lists=c.listas&&c.listas.length?'<div class="contact-memberships">Listas: '+c.listas.map(esc).join(" · ")+'</div>':"";
+    return '<article class="contact-row contact-source-row"><label class="contact-select"><input type="checkbox" data-contact-id="'+esc(c.id)+'"'+checked+'> <span>Seleccionar</span></label><div class="contact-data">'+campos+lists+'</div></article>';
+  }).join(""):'<p class="empty-state">La hoja Contactos no contiene registros con datos.</p>';
+  document.querySelectorAll("#contacts-list input[data-contact-id]").forEach(cb=>cb.addEventListener("change",()=>{
+    if(cb.checked)selectedContactIds.add(cb.dataset.contactId);else selectedContactIds.delete(cb.dataset.contactId);
+    $("contacts-selected").textContent=selectedContactIds.size+" seleccionados";
+  }));
 }
-function renderMembership(c){
-  $("contact-list-membership").innerHTML=mailLists.map(l=>{
-    const checked=c&&c.listas.some(n=>n.toLowerCase()===l.nombre.toLowerCase())?" checked":"";
-    return '<label><input type="checkbox" value="'+esc(l.id)+'"'+checked+'> '+esc(l.nombre)+'</label>';
-  }).join("")||"No hay listas.";
+function refreshAssignmentLists(){
+  $("assignment-list").innerHTML='<option value="">Seleccionar…</option>'+mailLists.filter(l=>l.estado==="Activa").map(l=>'<option value="'+esc(l.id)+'">'+esc(l.nombre)+'</option>').join("");
 }
-window.editContact=id=>{
-  const c=contacts.find(x=>x.id===id);
-  if(!c)return;
-  $("contact-id").value=c.id;$("contact-name").value=c.nombre;$("contact-last").value=c.apellido;$("contact-full").value=c.nombreCompleto;$("contact-media").value=c.medio;$("contact-role").value=c.cargo;$("contact-email").value=c.email;$("contact-phone").value=c.telefono;$("contact-city").value=c.localidad;$("contact-state").value=c.estado;$("contact-notes").value=c.observaciones;
-  renderMembership(c);$("contact-modal-title").textContent="Editar contacto";$("contact-modal").hidden=false;
-};
-window.toggleContact=async id=>{
-  const c=contacts.find(x=>x.id===id);if(!c)return;
-  try{await post("contactSave",{id:c.id,nombre:c.nombre,apellido:c.apellido,nombreCompleto:c.nombreCompleto,medio:c.medio,cargo:c.cargo,email:c.email,telefono:c.telefono,localidad:c.localidad,listas:c.listas.join("; "),estado:c.estado==="Activo"?"Inactivo":"Activo",observaciones:c.observaciones});await loadContactsModule();showNotice("✓ Estado del contacto actualizado.");}catch(e){showNotice("⚠ "+e.message,"error");}
-};
-function closeContactModal(){$("contact-modal").hidden=true}
 function closeListModal(){$("list-modal").hidden=true}
+$("select-all-contacts").onclick=()=>{
+  if(selectedContactIds.size===contacts.length)selectedContactIds.clear();else contacts.forEach(c=>selectedContactIds.add(c.id));
+  renderContacts();
+};
+$("assign-selected-btn").onclick=()=>{
+  if(!selectedContactIds.size){showNotice("Seleccioná al menos un contacto.","error");return}
+  refreshAssignmentLists();
+  $("assignment-summary").textContent=selectedContactIds.size+" contacto(s) seleccionado(s). Elegí una lista existente o creá una nueva.";
+  $("assignment-list").value="";$("assignment-new-name").value="";$("assignment-new-description").value="";
+  $("list-modal").hidden=false;
+};
+$("save-assignment-btn").onclick=async()=>{
+  try{
+    const ids=[...selectedContactIds];
+    let listId=$("assignment-list").value;
+    const newName=$("assignment-new-name").value.trim();
+    if(!listId&&!newName)throw new Error("Elegí una lista existente o ingresá un nombre para crear una nueva.");
+    $("save-assignment-btn").disabled=true;
+    if(!listId){
+      const r=await post("listSave",{nombre:newName,descripcion:$("assignment-new-description").value.trim(),estado:"Activa"});
+      listId=r.item.id;
+    }
+    await post("contactsAssignList",{contactIds:ids.join(","),listId});
+    closeListModal();
+    await loadMailingModule();
+    await loadContactsModule();
+    showNotice("✓ "+ids.length+" contacto(s) asignado(s) a la lista.","success");
+  }catch(e){showNotice("⚠ "+e.message,"error")}
+  finally{$("save-assignment-btn").disabled=false}
+};
 async function loadMailingModule(){
   try{
-    const r=await post("listsList");mailLists=r.items||[];renderLists();fillCampaignContent();
-    if(!$("contact-modal").hidden)renderMembership(contacts.find(c=>c.id===$("contact-id").value)||null);
+    const r=await post("listsList");mailLists=r.items||[];renderLists();fillCampaignContent();refreshAssignmentLists();
   }catch(e){$("mailing-lists").innerHTML='<p class="empty-state">⚠ No se pudieron cargar las listas: '+esc(e.message)+'</p>';showNotice("⚠ No se pudieron cargar las listas: "+e.message,"error");}
 }
 function renderLists(){
@@ -173,34 +195,6 @@ function renderLists(){
   $("mailing-lists").innerHTML=mailLists.map(l=>'<label class="mailing-list"><input type="checkbox" value="'+esc(l.id)+'"> <span><strong>'+esc(l.nombre)+'</strong><small>'+esc(l.descripcion||"Lista de distribución")+'</small></span></label>').join("");
 }
 function fillCampaignContent(){$("campaign-content").innerHTML='<option value="">Sin comunicado</option>'+items.filter(x=>x.estado==="Publicado").map(x=>'<option value="'+esc(x.id)+'">'+esc(x.titulo)+'</option>').join("");}
-$("contact-search").addEventListener("input",renderContacts);
-$("import-contacts-btn").onclick=async()=>{
-  try{$("import-contacts-btn").disabled=true;showNotice("Actualizando agenda…","success");const r=await post("contactsImport");showNotice("✓ Agenda actualizada: "+r.result.total+" registros procesados.");await loadContactsModule();}
-  catch(e){showNotice("⚠ "+e.message,"error");}
-  finally{$("import-contacts-btn").disabled=false;}
-};
-$("new-contact-btn").onclick=()=>{["contact-id","contact-name","contact-last","contact-full","contact-media","contact-role","contact-email","contact-phone","contact-city","contact-notes"].forEach(id=>$(id).value="");$("contact-state").value="Activo";renderMembership(null);$("contact-modal-title").textContent="Nuevo contacto";$("contact-modal").hidden=false;};
-$("save-contact-btn").onclick=async()=>{
-  try{
-    const saved=await post("contactSave",{id:$("contact-id").value,nombre:$("contact-name").value,apellido:$("contact-last").value,nombreCompleto:$("contact-full").value,medio:$("contact-media").value,cargo:$("contact-role").value,email:$("contact-email").value,telefono:$("contact-phone").value,localidad:$("contact-city").value,estado:$("contact-state").value,observaciones:$("contact-notes").value});
-    const ids=[...document.querySelectorAll("#contact-list-membership input:checked")].map(x=>x.value);
-    await post("membershipSave",{contactId:saved.item.id,listIds:ids.join(",")});
-    closeContactModal();await loadContactsModule();showNotice("✓ Contacto guardado y listas actualizadas.");
-  }catch(e){showNotice("⚠ "+e.message,"error");}
-};
-$("new-list-btn").onclick=()=>{$("list-id").value="";$("list-name").value="";$("list-description").value="";$("list-modal").hidden=false;};
-$("save-list-btn").onclick=async()=>{
-  try{if(!$("list-name").value.trim())throw new Error("Ingresá un nombre para la lista.");await post("listSave",{id:$("list-id").value,nombre:$("list-name").value.trim(),descripcion:$("list-description").value.trim(),estado:"Activa"});closeListModal();await loadMailingModule();showNotice("✓ Lista guardada.");}
-  catch(e){showNotice("⚠ "+e.message,"error");}
-};
-$("preview-campaign-btn").onclick=async()=>{
-  try{
-    const ids=[...document.querySelectorAll("#mailing-lists input:checked")].map(x=>x.value);
-    if(!ids.length)throw new Error("Seleccioná al menos una lista.");
-    const r=await post("campaignPreview",{listIds:ids.join(",")});campaignPreview=r.preview;
-    $("campaign-preview").innerHTML="<strong>"+campaignPreview.total+" destinatarios únicos</strong><br>"+campaignPreview.destinatarios.slice(0,12).map(x=>esc(x.nombre)+" · "+esc(x.email)).join("<br>")+(campaignPreview.total>12?"<br>…":"");
-  }catch(e){showNotice("⚠ "+e.message,"error");}
-};
 $("save-campaign-btn").onclick=async()=>{
   try{
     const ids=[...document.querySelectorAll("#mailing-lists input:checked")].map(x=>x.value);
@@ -209,65 +203,17 @@ $("save-campaign-btn").onclick=async()=>{
     showNotice("✓ Campaña preparada. Destinatarios: "+r.item.destinatarios);
   }catch(e){showNotice("⚠ "+e.message,"error");}
 };
+$("preview-campaign-btn").onclick=async()=>{
+  try{
+    const ids=[...document.querySelectorAll("#mailing-lists input:checked")].map(x=>x.value);
+    if(!ids.length)throw new Error("Seleccioná al menos una lista.");
+    const r=await post("campaignPreview",{listIds:ids.join(",")});campaignPreview=r.preview;
+    $("campaign-preview").innerHTML="<strong>"+campaignPreview.total+" destinatarios únicos</strong><br>"+campaignPreview.destinatarios.slice(0,12).map(x=>esc(x.nombre||x.email)+" · "+esc(x.email)).join("<br>")+(campaignPreview.total>12?"<br>…":"");
+  }catch(e){showNotice("⚠ "+e.message,"error");}
+};
 loadContactsModule();
-loadMailingModule();e html>
-<html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Panel editorial | Centro de Prensa</title><link rel="stylesheet" href="assets/css/style.css"><style>.action-status{margin-top:14px;padding:12px 14px;background:#eef5f9;border-left:4px solid var(--mides-blue);color:var(--mides-dark);font-size:13px;font-weight:700}.action-status.success{border-left-color:#2e8b57}.action-status.error{border-left-color:#c0392b;background:#fff0f0;color:#5b1f1f}.form-actions button:disabled{opacity:.65;cursor:wait}</style></head>
-<body class="admin-body">
-<header class="site-header"><div class="brand-wrap"><img class="brand-logo" src="https://www.gub.uy/ministerio-desarrollo-social/sites/ministerio-desarrollo-social/files/styles/documento/public/imagenes/publicaciones/logo_mides.png" alt="Ministerio de Desarrollo Social"><div class="brand-divider"></div><div><strong>PANEL EDITORIAL</strong> <span>MIDES Florida</span></div></div><a class="admin-link" href="index.html">Ver sala de prensa</a></header>
-<main class="admin-main">
-<section class="page-title"><p class="eyebrow">GESTIÓN EDITORIAL</p><h1>Centro de Prensa</h1><p>Los contenidos se guardan en Google Sheets y los publicados aparecen automáticamente en la sala de prensa.</p></section>
-<section class="editor-card">
-<div class="section-heading"><div><p class="eyebrow">CONTENIDO</p><h2 id="form-title">Nuevo comunicado</h2></div><span id="editor-status" class="status">Borrador</span></div>
-<form id="editor-form"><input type="hidden" id="edit-id">
-<div class="form-grid">
-<label>Título<input id="title" required maxlength="180" placeholder="Título del comunicado"></label>
-<label>Fecha<input id="date" type="date" required></label>
-<label>Categoría<select id="category"><option>Comunicado</option><option>Actividad</option><option>Programa</option><option>Institucional</option><option>Convocatoria</option></select></label>
-<label>Etiqueta<input id="tag" maxlength="60" placeholder="Florida"></label>
-<label class="full">Resumen<textarea id="summary" rows="3" maxlength="320" placeholder="Resumen breve para la portada"></textarea></label>
-<label class="full">Contenido<textarea id="content" rows="12" placeholder="Redactá aquí el comunicado completo"></textarea></label>
-</div>
-<div class="media-editor">
-<div class="media-editor-title"><span class="eyebrow blue">MATERIAL MULTIMEDIA</span><h3>Fotos y video de la actividad</h3><p>Las imágenes y videos se almacenan en Google Drive dentro de la carpeta del comunicado.</p></div>
-<div class="form-grid media-grid">
-<label class="full">Foto principal<input id="coverImage" type="url" placeholder="https://.../foto-principal.jpg"></label>
-<label class="full">Seleccionar imágenes<input id="imageFiles" type="file" accept="image/*" multiple><small class="field-help">Podés seleccionar varias imágenes a la vez. Máximo 10 MB por imagen.</small></label>
-<div class="upload-status full" id="image-upload-status">No hay imágenes nuevas seleccionadas.</div>
-<label class="full">Fotos adicionales<textarea id="gallery" rows="4" placeholder="También podés pegar URLs de imágenes, una por línea."></textarea></label>
-<label class="full">Video relacionado<input id="videoFile" type="file" accept="video/*"><small class="field-help">El video se carga por fragmentos mediante Apps Script y se guarda en Google Drive.</small></label>
-<label class="full">Video guardado<input id="videoUrl" type="url" readonly placeholder="Se completará automáticamente al subir el video"></label>
-<div class="upload-status full" id="video-upload-status">No hay video nuevo seleccionado.</div>
-</div>
-</div>
-<div class="form-actions"><button type="submit" id="save-btn">Guardar borrador</button><button type="button" class="secondary" id="publish-btn">Publicar</button><button type="button" class="ghost" id="clear-btn">Limpiar</button></div><div id="action-status" class="action-status" role="status" aria-live="polite">Listo para trabajar.</div>
-</form></section>
-<section class="editor-card"><div class="section-heading"><div><p class="eyebrow">CONTENIDOS</p><h2>Comunicados guardados</h2></div><span id="count" class="status">0</span></div><div id="draft-list" class="draft-list"><p class="empty-state">Consultando Google Sheets…</p></div></section>
-<div class="dashboard-grid">
-<article class="dashboard-card"><span class="icon">02</span><h2>Multimedia</h2><p>Fotografías, videos y documentos asociados a cada actividad.</p><button type="button" onclick="showNotice('La carga multimedia está disponible dentro de cada comunicado')">Abrir biblioteca</button></article>
-<article class="dashboard-card"><span class="icon">03</span><h2>Medios</h2><p>Agenda de contactos y grupos de distribución.</p><button type="button" onclick="showNotice('Gestión de medios: siguiente módulo')">Gestionar medios</button></article>
-<article class="dashboard-card"><span class="icon">04</span><h2>Mailing</h2><p>Preparar y enviar campañas a listas de prensa.</p><button type="button" onclick="showNotice('Mailing: siguiente módulo')">Nueva campaña</button></article>
-</div>
-<section class="status-panel"><div><strong>Base editorial</strong><span>Google Sheets + Apps Script</span></div><div><strong>Estado</strong><span id="api-status" class="status">Configurando API</span></div></section>
-
-<section class="editor-card" id="contactos-module">
-<div class="section-heading"><div><p class="eyebrow">AGENDA DE MEDIOS</p><h2>Contactos</h2><p class="module-help">Agenda operativa derivada de la hoja Contactos. La importación original no se modifica.</p></div><span id="contacts-count" class="status">0</span></div>
-<div class="module-toolbar"><input id="contact-search" placeholder="Buscar por nombre, medio o email"><button type="button" id="import-contacts-btn">Actualizar agenda</button><button type="button" class="ghost" id="new-contact-btn">Nuevo contacto</button></div>
-<div id="contacts-list" class="contacts-list"><p class="empty-state">Cargando contactos…</p></div>
-</section>
-<section class="editor-card" id="mailing-module">
-<div class="section-heading"><div><p class="eyebrow">DISTRIBUCIÓN</p><h2>Mailing</h2><p class="module-help">Preparación de campañas y selección de listas. El sistema todavía no envía correos automáticamente.</p></div><span id="mailing-count" class="status">0 listas</span></div>
-<div class="mailing-grid">
-<div><h3>Listas de distribución</h3><div id="mailing-lists" class="mailing-lists"><p class="empty-state">Cargando listas…</p></div><button type="button" id="new-list-btn">Nueva lista</button></div>
-<div class="campaign-box"><h3>Nueva campaña</h3><label>Asunto<input id="campaign-subject" placeholder="Asunto del envío"></label><label>Comunicado<select id="campaign-content"><option value="">Sin comunicado</option></select></label><label>Notas<textarea id="campaign-notes" rows="4" placeholder="Notas internas"></textarea></label><button type="button" id="preview-campaign-btn">Calcular destinatarios</button><div id="campaign-preview" class="campaign-preview">Seleccioná una o más listas.</div><button type="button" id="save-campaign-btn" class="secondary">Guardar campaña preparada</button></div>
-</div>
-</section>
-<div id="contact-modal" class="modal" hidden><div class="modal-card"><div class="section-heading"><h2 id="contact-modal-title">Nuevo contacto</h2><button type="button" class="ghost" onclick="closeContactModal()">Cerrar</button></div><input type="hidden" id="contact-id"><div class="form-grid contact-form-grid"><label>Nombre<input id="contact-name"></label><label>Apellido<input id="contact-last"></label><label class="full">Nombre completo<input id="contact-full"></label><label>Medio / institución<input id="contact-media"></label><label>Cargo<input id="contact-role"></label><label>Email<input id="contact-email" type="email"></label><label>Teléfono<input id="contact-phone"></label><label>Localidad<input id="contact-city"></label><label>Estado<select id="contact-state"><option>Activo</option><option>Inactivo</option></select></label><label class="full">Listas de mailing<div id="contact-list-membership" class="membership-box">Cargando listas…</div></label><label class="full">Observaciones<textarea id="contact-notes" rows="3"></textarea></label></div><div class="form-actions"><button type="button" id="save-contact-btn">Guardar contacto</button></div></div></div>
-<div id="list-modal" class="modal" hidden><div class="modal-card"><div class="section-heading"><h2>Nueva lista</h2><button type="button" class="ghost" onclick="closeListModal()">Cerrar</button></div><input type="hidden" id="list-id"><label class="modal-label">Nombre<input id="list-name"></label><label class="modal-label">Descripción<textarea id="list-description" rows="3"></textarea></label><div class="form-actions"><button type="button" id="save-list-btn">Guardar lista</button></div></div></div>
-</main>
-<div id="notice" class="toast" hidden></div>
-<script src="config.js"></script>
+loadMailingModule();
+</script>
 <script>
 let editorKey="",items=[],pendingVideo=null,pendingImages=[];
 const $=id=>document.getElementById(id),today=new Date().toISOString().slice(0,10);
