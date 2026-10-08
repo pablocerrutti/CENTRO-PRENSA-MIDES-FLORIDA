@@ -145,11 +145,119 @@ function getMailing_(id){
  return{id:String(r[0]),fecha:formatDateTime_(r[1]),asunto:String(r[2]||''),listaIds:String(r[3]||'').split(',').filter(Boolean),destinatarios:Number(r[5]||0),estado:String(r[6]||''),publicUrl:String(r[7]||''),whatsappUrl:String(r[8]||''),items:ids.map(findById_).filter(x=>x&&x.estado==='Publicado')};
 }
 
+
+/* =========================
+   AGENDA DE FUNCIONARIOS
+   ========================= */
+const FUNC_HEADERS=['ID','Nombre','Area','Password','Rol','Color','Estado','FechaCreacion'];
+const AGENDA_HEADERS=['ID','UsuarioID','NombreUsuario','Area','Inicio','Fin','Actividad','Lugar','Descripcion','ImagenURL','FechaCreacion','Estado'];
+const FUNC_SHEET='Funcionarios';
+const AGENDA_SHEET='AgendaFuncionarios';
+const AREA_PALETTE=['#005ca9','#177245','#8a4b08','#7b2cbf','#c0392b','#007f86','#9a6700','#31572c','#6a1b9a','#006d77','#a23e48','#3a506b'];
+
+function normalizeText_(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+}
+function makeFuncionarioPassword_(nombre,area,id){
+  return String(nombre||'').trim().replace(/\s+/g,'')+'+'+String(area||'').trim().replace(/\s+/g,'')+'+'+id;
+}
+function getFuncionarioSheet_(){return getNamedSheet_(FUNC_SHEET,FUNC_HEADERS);}
+function getAgendaSheet_(){return getNamedSheet_(AGENDA_SHEET,AGENDA_HEADERS);}
+function areaColor_(area,excludeId){
+  const sh=getFuncionarioSheet_(),rows=sh.getLastRow()>1?sh.getRange(2,1,sh.getLastRow()-1,FUNC_HEADERS.length).getValues():[];
+  for(const r of rows)if(String(r[2]||'').trim().toLowerCase()===String(area||'').trim().toLowerCase() && String(r[0])!==String(excludeId||''))return String(r[5]||AREA_PALETTE[0]);
+  const used=rows.map(r=>String(r[5]||'')).filter(Boolean);
+  return AREA_PALETTE.find(c=>!used.includes(c))||AREA_PALETTE[used.length%AREA_PALETTE.length];
+}
+function funcionarioRow_(r){
+  return {id:String(r[0]),nombre:String(r[1]||''),area:String(r[2]||''),password:String(r[3]||''),rol:String(r[4]||'Funcionario'),color:String(r[5]||AREA_PALETTE[0]),estado:String(r[6]||'Activo'),fechaCreacion:formatDateTime_(r[7])};
+}
+function listFuncionarios_(){
+  const sh=getFuncionarioSheet_();
+  if(sh.getLastRow()<2)return [];
+  return sh.getRange(2,1,sh.getLastRow()-1,FUNC_HEADERS.length).getValues().filter(r=>r[0]).map(funcionarioRow_);
+}
+function findFuncionario_(id){return listFuncionarios_().find(x=>String(x.id)===String(id))||null;}
+function findFuncionarioByCredentials_(nombre,area,password){
+  const n=normalizeText_(nombre),a=normalizeText_(area),p=String(password||'');
+  return listFuncionarios_().find(x=>x.estado==='Activo'&&normalizeText_(x.nombre)===n&&normalizeText_(x.area)===a&&x.password===p)||null;
+}
+function saveFuncionario_(p){
+  const nombre=String(p.nombre||'').trim(),area=String(p.area||'').trim(),rol=String(p.rol||'Funcionario').trim();
+  if(!nombre||!area)throw new Error('Nombre y área son obligatorios.');
+  if(!['Funcionario','Director Departamental','Jefa Departamental'].includes(rol))throw new Error('Rol no válido.');
+  const sh=getFuncionarioSheet_(),id=p.id||'F-'+Utilities.getUuid().slice(0,8).toUpperCase(),old=findFuncionario_(id),color=old?.color||areaColor_(area,id),password=old?.password||makeFuncionarioPassword_(nombre,area,id),now=formatDateTime_(new Date());
+  const row=[id,nombre,area,password,rol,color,p.estado||old?.estado||'Activo',old?.fechaCreacion||now];
+  const rows=sh.getDataRange().getValues();let n=-1;
+  for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
+  if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,FUNC_HEADERS.length).setValues([row]);
+  return funcionarioRow_(row);
+}
+function deleteFuncionario_(id){
+  const sh=getFuncionarioSheet_(),rows=sh.getDataRange().getValues();
+  for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(id)){sh.getRange(i+1,7).setValue('Inactivo');return funcionarioRow_(sh.getRange(i+1,1,1,FUNC_HEADERS.length).getValues()[0]);}
+  return null;
+}
+function parseAgendaDate_(s){
+  const d=new Date(String(s||''));
+  if(isNaN(d.getTime()))throw new Error('Fecha u horario inválido.');
+  return d;
+}
+function agendaRow_(r){
+  return {id:String(r[0]),usuarioId:String(r[1]),nombreUsuario:String(r[2]||''),area:String(r[3]||''),inicio:String(r[4]||''),fin:String(r[5]||''),actividad:String(r[6]||''),lugar:String(r[7]||''),descripcion:String(r[8]||''),imagenUrl:String(r[9]||''),fechaCreacion:String(r[10]||''),estado:String(r[11]||'Activa'),color:areaColor_(String(r[3]||''))};
+}
+function listAgenda_(from,to){
+  const sh=getAgendaSheet_();if(sh.getLastRow()<2)return [];
+  const lo=from?parseAgendaDate_(from):new Date(0),hi=to?parseAgendaDate_(to):new Date('2999-12-31T23:59:59');
+  return sh.getRange(2,1,sh.getLastRow()-1,AGENDA_HEADERS.length).getValues().filter(r=>r[0]&&String(r[11]||'Activa')==='Activa').map(agendaRow_).filter(x=>{
+    const s=parseAgendaDate_(x.inicio),f=parseAgendaDate_(x.fin);return f>=lo&&s<=hi;
+  });
+}
+function agendaConflict_(inicio,fin,excludeId){
+  const s=parseAgendaDate_(inicio),f=parseAgendaDate_(fin);
+  return listAgenda_().find(x=>String(x.id)!==String(excludeId||'')&&parseAgendaDate_(x.inicio)<f&&parseAgendaDate_(x.fin)>s)||null;
+}
+function saveAgenda_(p){
+  const u=findFuncionarioByCredentials_(p.nombreUsuario||'',p.area||'',p.password||'');
+  if(!u)throw new Error('No se pudo validar el funcionario. Volvé a iniciar sesión.');
+  const inicio=String(p.inicio||''),fin=String(p.fin||''),actividad=String(p.actividad||'').trim(),lugar=String(p.lugar||'').trim(),descripcion=String(p.descripcion||'').trim();
+  const s=parseAgendaDate_(inicio),f=parseAgendaDate_(fin);
+  if(f<=s)throw new Error('La hora de finalización debe ser posterior a la de inicio.');
+  if(!actividad||!lugar)throw new Error('Actividad y lugar son obligatorios.');
+  const conflict=agendaConflict_(inicio,fin,p.id),sh=getAgendaSheet_(),id=p.id||'A-'+Utilities.getUuid().slice(0,8).toUpperCase(),now=formatDateTime_(new Date());
+  const row=[id,u.id,u.nombre,u.area,inicio,fin,actividad,lugar,descripcion,String(p.imagenUrl||''),now,'Activa'];
+  const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
+  if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,AGENDA_HEADERS.length).setValues([row]);
+  const item=agendaRow_(row);
+  return {item,conflict:conflict?agendaRow_(conflict):null,message:conflict?'La actividad fue registrada, pero existe una actividad paralela en el mismo horario. Queda a criterio de la Dirección definir la prioridad.':'Actividad creada correctamente.'};
+}
+function validateFuncionario_(p){const u=findFuncionarioByCredentials_(p.nombre||p.nombreUsuario||'',p.area||'',p.password||'');if(!u)throw new Error('Credenciales de funcionario incorrectas.');return u;}
+function uploadAgendaImage_(p){
+  const u=validateFuncionario_(p);if(!p.data)throw new Error('No se recibió la imagen.');
+  const bytes=Utilities.base64Decode(String(p.data).replace(/^data:[^;]+;base64,/,''));
+  if(bytes.length>10*1024*1024)throw new Error('La imagen supera el límite de 10 MB.');
+  const root=getDriveRoot_(),folder=getOrCreateFolder_(root,'Agenda de actividades - MIDES Florida');
+  const safe=String(p.fileName||'actividad.jpg').replace(/[^a-zA-Z0-9._-]/g,'_');
+  const file=folder.createFile(Utilities.newBlob(bytes,p.mimeType||'image/jpeg',u.id+'_'+Date.now()+'_'+safe));
+  try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}
+  return {url:'https://drive.google.com/uc?export=view&id='+file.getId(),fileId:file.getId(),name:file.getName()};
+}
+function adminCalendar_(p){return listAgenda_(p.from,p.to);}
+
 function doPost(e){
   try{
     const p=e&&e.parameter?e.parameter:{};
+    if(p.action==='funcionarioLogin'){const u=findFuncionarioByCredentials_(p.nombre||'',p.area||'',p.password||'');return json_({ok:!!u,user:u||null,error:u?null:'Credenciales de funcionario incorrectas'});}
+    if(p.action==='agendaList'){return json_({ok:true,items:listAgenda_(p.from,p.to)});}
+    if(p.action==='agendaSave'){const r=saveAgenda_(p);return json_({ok:true,...r});}
+    if(p.action==='agendaUploadImage'){return json_({ok:true,image:uploadAgendaImage_(p)});}
+    if(p.action==='agendaDeleteOwn'){const u=validateFuncionario_(p),sh=getAgendaSheet_(),rows=sh.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(p.id)&&String(rows[i][1])===u.id){sh.getRange(i+1,12).setValue('Inactiva');return json_({ok:true});}return json_({ok:false,error:'Actividad no encontrada'});}
     if(p.key!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
     if(p.action==='adminList')return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});
+    if(p.action==='funcionariosList')return json_({ok:true,items:listFuncionarios_()});
+    if(p.action==='funcionarioSave')return json_({ok:true,item:saveFuncionario_(p)});
+    if(p.action==='funcionarioDelete')return json_({ok:true,item:deleteFuncionario_(p.id)});
+    if(p.action==='adminAgendaList')return json_({ok:true,items:adminCalendar_(p)});
     if(p.action==='adminGet')return json_({ok:true,item:findById_(p.id)});
     if(p.action==='save')return json_({ok:true,item:save_(p)});
     if(p.action==='savePublish')return json_({ok:true,item:saveAndPublish_(p)});
