@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mailing institucional · MIDES Florida</title>
+<style>
+body{margin:0;background:#f4f6f7;color:#1f2933;font-family:Arial,Helvetica,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:28px 16px 60px}
+.card{background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08);overflow:hidden}
+.head{padding:28px 30px;border-bottom:1px solid #e5e7eb}
+.logo{max-width:190px;max-height:70px;object-fit:contain}
+.kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin:20px 0 6px}
+h1{margin:0;font-size:32px;line-height:1.15}
+.date{margin-top:10px;color:#65737e}
+.content{padding:24px 30px}
+.article{padding:0 0 28px;margin:0 0 28px;border-bottom:1px solid #e5e7eb}
+.article:last-child{border-bottom:0;margin-bottom:0}
+.cover{width:100%;max-height:430px;object-fit:cover;border-radius:12px;margin:0 0 18px}
+h2{font-size:25px;margin:0 0 10px}
+.summary{font-size:17px;line-height:1.55}
+.meta{font-size:13px;color:#6b7280;margin-bottom:10px}
+a.btn{display:inline-block;margin-top:12px;padding:11px 16px;border-radius:9px;background:#006b5b;color:#fff;text-decoration:none;font-weight:700}
+.footer{padding:20px 30px;background:#f8fafb;color:#66737c;font-size:13px}
+.empty{padding:40px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap"><main class="card" id="app"><div class="empty">Cargando mailing institucional…</div></main></div>
+<script src="config.js"></script>
+<script>
+const api=window.PRENSA_CONFIG?.apiUrl;
+const id=new URLSearchParams(location.search).get("id");
+const esc=v=>String(v??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+function render(x){
+ const articles=(x.items||[]).map(a=>'<article class="article">'+
+ (a.fotoPrincipal?'<img class="cover" src="'+esc(a.fotoPrincipal)+'" alt="'+esc(a.titulo)+'">':'')+
+ '<div class="meta">'+esc(a.fecha)+' · '+esc(a.categoria)+'</div>'+
+ '<h2>'+esc(a.titulo)+'</h2><div class="summary">'+esc(a.resumen||"")+'</div>'+
+ '<a class="btn" href="comunicado.html?id='+encodeURIComponent(a.id)+'">Leer comunicado completo</a>'+
+ '</article>').join("");
+ document.getElementById("app").innerHTML='<header class="head"><img class="logo" src="https://www.gub.uy/ministerio-desarrollo-social/sites/ministerio-desarrollo-social/files/styles/documento/public/imagenes/publicaciones/logo_mides.png" class="logo" alt="MIDES"><div class="kicker">MIDES Florida · Comunicación institucional</div><h1>'+esc(x.asunto)+'</h1><div class="date">'+esc(x.fecha)+'</div></header><section class="content">'+(articles||'<div class="empty">Este mailing no contiene artículos publicados.</div>')+'</section><footer class="footer">Ministerio de Desarrollo Social · MIDES Florida</footer>';
+}
+async function load(){
+ if(!api||!id){document.getElementById("app").innerHTML='<div class="empty">No se encontró el mailing solicitado.</div>';return}
+ try{const r=await fetch(api+"?action=mailing&id="+encodeURIComponent(id),{cache:"no-store"});const d=await r.json();if(!d.ok)throw new Error("Mailing no disponible");render(d.item)}catch(e){document.getElementById("app").innerHTML='<div class="empty">No fue posible cargar este mailing.</div>'}
+}
+load();
+</script>
+</body>
+</html>
