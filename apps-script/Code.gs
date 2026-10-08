@@ -81,13 +81,48 @@ function contactSource_(){const sh=getSpreadsheet_().getSheetByName(CONTACT_SOUR
 function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?String(r[c]??'').trim():''};const nombre=val(['Nombre','First Name','Given Name']),apellido=val(['Apellido','Last Name','Family Name']),nombreCompleto=val(['NombreCompleto','Nombre completo','Name','Display Name'])||[nombre,apellido].filter(Boolean).join(' ');return {nombre,apellido,nombreCompleto,email:val(['Email','E-mail','Correo electrónico','Correo','Email 1 - Value','E-mail 1 - Value']),telefono:val(['Telefono','Teléfono','Phone','Mobile Phone','Phone 1 - Value']),medio:val(['Medio','Organization','Organización','Empresa','Company','Organization 1 - Name']),cargo:val(['Cargo','Title','Puesto','Organization 1 - Title']),localidad:val(['Localidad','Ciudad','City','Address 1 - City'])};}
 function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
 function readContacts_(){
-  const ss=SpreadsheetApp.openById(CONFIG.contactSpreadsheetId),sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
-  if(!sh||sh.getLastRow()<2||sh.getLastColumn()<19)return [];
-  const values=sh.getRange(2,19,sh.getLastRow()-1,1).getDisplayValues();
+  const ss=SpreadsheetApp.openById(CONFIG.contactSpreadsheetId);
+  const sh=ss.getSheetByName(CONTACT_SOURCE_SHEET);
+  if(!sh||sh.getLastRow()<2)return [];
+
+  // Fuente única: hoja Contactos. Buscar el encabezado exacto
+  // "E-mail 1 - Value"; si no existe, usar S como respaldo.
+  const headers=sh.getRange(1,1,1,Math.max(19,sh.getLastColumn())).getDisplayValues()[0];
+  const normalized=headers.map(normalizeHeader_);
+  let col=normalized.indexOf(normalizeHeader_('E-mail 1 - Value'));
+  if(col<0)col=18;
+  if(col>=sh.getLastColumn())return [];
+
+  const values=sh.getRange(2,col+1,sh.getLastRow()-1,1).getDisplayValues();
   const ms=ss.getSheetByName(MEMBERSHIPS_SHEET),map={};
-  if(ms&&ms.getLastRow()>1)ms.getRange(2,1,ms.getLastRow()-1,2).getValues().forEach(r=>{const k=String(r[0]||''),v=String(r[1]||'');if(k&&v)(map[k]||(map[k]=[])).push(v)});
-  const lists=listMailingLists_(),names={};lists.forEach(l=>names[l.id]=l.nombre);
-  return values.map(r=>{const email=String(r[0]||'').trim().toLowerCase();if(!email)return null;const id='C-'+Utilities.base64EncodeWebSafe(email).replace(/=+$/,'').slice(0,32);return{id,nombre:email,apellido:'',nombreCompleto:email,medio:'',cargo:'',email,telefono:'',localidad:'',listas:(map[id]||[]).map(x=>names[x]).filter(Boolean),estado:'Activo',observaciones:'',campos:[{columna:'S',valor:email}]}}).filter(Boolean);
+  if(ms&&ms.getLastRow()>1)ms.getRange(2,1,ms.getLastRow()-1,2).getValues().forEach(r=>{
+    const k=String(r[0]||''),v=String(r[1]||'');
+    if(k&&v)(map[k]||(map[k]=[])).push(v);
+  });
+  const lists=listMailingLists_(),names={};
+  lists.forEach(l=>names[l.id]=l.nombre);
+
+  return values.map(r=>{
+    const email=String(r[0]||'').trim();
+    if(!email)return null;
+    const normalizedEmail=email.toLowerCase();
+    const id='C-'+Utilities.base64EncodeWebSafe(normalizedEmail).replace(/=+$/,'').slice(0,32);
+    return {
+      id,
+      nombre:email,
+      apellido:'',
+      nombreCompleto:email,
+      medio:'',
+      cargo:'',
+      email,
+      telefono:'',
+      localidad:'',
+      listas:(map[id]||[]).map(x=>names[x]).filter(Boolean),
+      estado:'Activo',
+      observaciones:'',
+      campos:[{columna:'E-mail 1 - Value',valor:email}]
+    };
+  }).filter(Boolean);
 }
 function importContacts_(){
   const src=contactSource_();
