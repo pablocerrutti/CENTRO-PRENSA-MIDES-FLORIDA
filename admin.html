@@ -252,9 +252,11 @@ $("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getF
         input.focus();
         return false;
       }
+      try { if (typeof editorKey !== "undefined") editorKey = value; if (typeof editorialAuthorized !== "undefined") editorialAuthorized = true; } catch (_) {}
       window.editorialAuthorized=true;
       screen.classList.add("ok");
       if(error)error.style.display="none";
+      if (typeof load === "function") { try { load(); } catch (_) {} }
       return false;
     },true);
   }
