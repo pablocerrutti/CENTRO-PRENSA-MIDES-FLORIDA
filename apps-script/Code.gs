@@ -316,7 +316,7 @@ function doPost(e){
     if(p.action==='agendaList'){validateFuncionario_(p);return json_({ok:true,items:listAgenda_(p.from,p.to)});}
     if(p.action==='agendaSave'){const r=saveAgenda_(p);return json_({ok:true,...r});}
     if(p.action==='agendaUploadImage'){return json_({ok:true,image:uploadAgendaImage_(p)});}
-    if(p.action==='agendaDeleteOwn'){const u=validateFuncionario_(p),sh=getAgendaSheet_(),rows=sh.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(p.id)&&String(rows[i][1])===u.id){sh.getRange(i+1,12).setValue('Inactiva');return json_({ok:true});}return json_({ok:false,error:'Actividad no encontrada'});}
+    if(p.action==='agendaDeleteOwn'){const u=validateFuncionario_(p),sh=getAgendaSheet_(),rows=sh.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][0])===String(p.id)&&String(rows[i][1])===u.id){sh.getRange(i+1,12).setValue('Inactiva');try{CacheService.getScriptCache().put('agenda_version',Utilities.getUuid(),21600);}catch(_){}return json_({ok:true});}return json_({ok:false,error:'Actividad no encontrada'});}
     // Acceso editorial directo: únicamente la clave exacta Ik3r2026.
     if(String(p.key||'')!==CONFIG.adminKey)return json_({ok:false,error:'Clave editorial incorrecta'});
     if(p.action==='adminList'){return json_({ok:true,items:readAll_().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))});}
@@ -394,6 +394,7 @@ function uploadVideoComplete_(p){
   const fileUrl='https://drive.google.com/file/d/'+p.fileId+'/view',previewUrl='https://drive.google.com/file/d/'+p.fileId+'/preview';
   sh.getRange(row,12,1,4).setValues([[p.fileId,fileUrl,p.folderId||'',formatDateTime_(new Date())]]);
   sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  SpreadsheetApp.flush();invalidateEditorialCache_();
   return {complete:true,fileId:p.fileId,fileUrl:fileUrl,previewUrl:previewUrl,folderId:p.folderId||'',folderName:p.folderName||'',name:file.getName()};
 }
 function uploadVideoChunk_(p){
@@ -415,6 +416,7 @@ function uploadVideoChunk_(p){
   const fileUrl='https://drive.google.com/file/d/'+file.id+'/view',previewUrl='https://drive.google.com/file/d/'+file.id+'/preview';
   sh.getRange(row,12,1,4).setValues([[file.id,fileUrl,p.folderId||'',formatDateTime_(new Date())]]);
   sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  SpreadsheetApp.flush();invalidateEditorialCache_();
   return {complete:true,fileId:file.id,fileUrl:fileUrl,previewUrl:previewUrl,folderId:p.folderId||'',folderName:p.folderName||'',name:file.name||''};
 }
 function uploadCover_(p){
@@ -423,7 +425,7 @@ function uploadCover_(p){
  const bytes=Utilities.base64Decode(data);if(bytes.length>10*1024*1024)throw new Error('La foto principal supera el límite de 10 MB.');
  const file=folder.createFile(Utilities.newBlob(bytes,p.mimeType||'image/jpeg',p.fileName||'foto-principal.jpg'));try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW)}catch(err){}
  const sh=getSheet_(),row=findRow_(sh,p.id);if(row<0)throw new Error('No se encontró el comunicado para asociar la foto principal.');
- const url='https://drive.google.com/uc?export=view&id='+file.getId();sh.getRange(row,9).setValue(url);sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+ const url='https://drive.google.com/uc?export=view&id='+file.getId();sh.getRange(row,9).setValue(url);sh.getRange(row,16).setValue(formatDateTime_(new Date()));SpreadsheetApp.flush();invalidateEditorialCache_();
  return{url,fileId:file.getId(),driveUrl:file.getUrl(),name:file.getName(),folderName:folder.getName()};
 }
 function uploadImages_(p){
@@ -432,7 +434,7 @@ function uploadImages_(p){
   const files=JSON.parse(p.files),max=10*1024*1024,root=getDriveRoot_(),titleFolder=getOrCreateCommunicationFolder_(root,p.titulo||'Comunicado '+p.id),uploaded=[];
   files.forEach(f=>{const data=String(f.data||'').replace(/^data:[^;]+;base64,/,'');const bytes=Utilities.base64Decode(data);if(bytes.length>max)throw new Error('La imagen '+f.name+' supera el límite de 10 MB.');const file=titleFolder.createFile(Utilities.newBlob(bytes,f.type||'image/jpeg',f.name));try{file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);}catch(err){}uploaded.push({id:file.getId(),name:file.getName(),url:file.getUrl(),directUrl:'https://drive.google.com/uc?export=view&id='+file.getId()});});
   const sh=getSheet_(),row=findRow_(sh,p.id);if(row<0)throw new Error('No se encontró el comunicado para asociar las imágenes.');
-  const current=splitPhotos_(sh.getRange(row,10).getValue());sh.getRange(row,10).setValue(current.concat(uploaded.map(x=>x.directUrl)).join('\n'));sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  const current=splitPhotos_(sh.getRange(row,10).getValue());sh.getRange(row,10).setValue(current.concat(uploaded.map(x=>x.directUrl)).join('\n'));sh.getRange(row,16).setValue(formatDateTime_(new Date()));SpreadsheetApp.flush();invalidateEditorialCache_();
   return {folderId:titleFolder.getId(),folderName:titleFolder.getName(),items:uploaded};
 }
 function uploadAudio_(p){
@@ -449,7 +451,7 @@ function uploadAudio_(p){
   if(row<0)throw new Error('No se encontró el comunicado para asociar el audio.');
   const url='https://drive.google.com/uc?export=download&id='+file.getId();
   sh.getRange(row,17,1,3).setValues([[url,file.getId(),file.getUrl()]]);
-  sh.getRange(row,16).setValue(formatDateTime_(new Date()));
+  sh.getRange(row,16).setValue(formatDateTime_(new Date()));SpreadsheetApp.flush();invalidateEditorialCache_();
   return {fileId:file.getId(),url:url,driveUrl:file.getUrl(),name:file.getName()};
 }
 function getDriveRoot_(){return CONFIG.driveRootFolderId?DriveApp.getFolderById(CONFIG.driveRootFolderId):DriveApp.getRootFolder();}
@@ -457,9 +459,9 @@ function getOrCreateFolder_(parent,name){const it=parent.getFoldersByName(name);
 function getOrCreateCommunicationFolder_(parent,title){return getOrCreateFolder_(parent,safeFolderName_(title));}
 function safeFolderName_(name){return String(name).replace(/[\\/:*?"<>|#%{}~&]/g,' ').replace(/\s+/g,' ').trim().slice(0,150)||'Comunicado';}
 function findRow_(sh,id){const v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id))return i+1;return -1;}
-function setStatus_(id,status){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){const now=formatDateTime_(new Date());sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,16).setValue(now);return rowToObject_(sh.getRange(i+1,1,1,HEADERS.length).getValues()[0]);}return null;}
-function saveAndPublish_(p){const item=save_(p);const sh=getSheet_(),row=findRow_(sh,item.id);if(row<0)throw new Error('No se encontró el comunicado recién guardado.');const now=formatDateTime_(new Date());sh.getRange(row,2).setValue('Publicado');sh.getRange(row,16).setValue(now);return rowToObject_(sh.getRange(row,1,1,HEADERS.length).getValues()[0]);}
-function delete_(id){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.deleteRow(i+1);return true;}return false;}
+function setStatus_(id,status){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){const now=formatDateTime_(new Date());sh.getRange(i+1,2).setValue(status);sh.getRange(i+1,16).setValue(now);SpreadsheetApp.flush();invalidateEditorialCache_();return rowToObject_(sh.getRange(i+1,1,1,HEADERS.length).getValues()[0]);}return null;}
+function saveAndPublish_(p){const item=save_(p);const sh=getSheet_(),row=findRow_(sh,item.id);if(row<0)throw new Error('No se encontró el comunicado recién guardado.');const now=formatDateTime_(new Date());sh.getRange(row,2).setValue('Publicado');sh.getRange(row,16).setValue(now);SpreadsheetApp.flush();invalidateEditorialCache_();return rowToObject_(sh.getRange(row,1,1,HEADERS.length).getValues()[0]);}
+function delete_(id){const sh=getSheet_(),v=sh.getDataRange().getValues();for(let i=1;i<v.length;i++)if(String(v[i][0])===String(id)){sh.deleteRow(i+1);SpreadsheetApp.flush();invalidateEditorialCache_();return true;}return false;}
 function formatDate_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd');return String(v);}
 function formatDateTime_(v){if(!v)return '';if(Object.prototype.toString.call(v)==='[object Date]')return Utilities.formatDate(v,Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');return String(v);}
 function json_(obj){return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);}
