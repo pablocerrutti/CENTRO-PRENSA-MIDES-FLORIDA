@@ -97,7 +97,7 @@ function esc(v){return String(v??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt
 function key(){return editorKey}
 async function authorizeEditorial(){
   if(editorialAuthorized)return true;
-  try{if(sessionStorage.getItem("midesEditorialAuth")==="1"){editorKey="Ik3r2026";editorialAuthorized=true;return true}}catch(_){}
+  // Cada nueva carga del panel exige ingresar nuevamente la contraseña editorial.
   const input=$("editor-auth-password"),screen=$("editor-auth-screen"),error=$("editor-auth-error");
   const k=String(input?.value||"");
   if(k!=="Ik3r2026"){
@@ -109,7 +109,6 @@ async function authorizeEditorial(){
   // El servidor recibe la misma clave en cada operación posterior.
   editorKey="Ik3r2026";
   editorialAuthorized=true;
-  try{sessionStorage.setItem("midesEditorialAuth","1")}catch(_){}
   if(screen)screen.classList.add("ok");
   if(error)error.style.display="none";
   // Intentamos cargar inmediatamente; cualquier problema de API queda
@@ -242,7 +241,7 @@ $("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getF
     const error=document.getElementById("editor-auth-error");
     if(!form||!input||!screen)return;
     if(form.dataset.authGateInstalled==="1")return;
-    try{if(sessionStorage.getItem("midesEditorialAuth")==="1"){window.editorialAuthorized=true;screen.classList.add("ok");return;}}catch(_){}
+    // No se reutiliza una autorización de visitas anteriores: pedir contraseña al entrar.
     form.dataset.authGateInstalled="1";
     form.addEventListener("submit",function(e){
       e.preventDefault();
@@ -253,7 +252,6 @@ $("admin-prev-month").onclick=()=>{adminAgendaDate=new Date(adminAgendaDate.getF
         return false;
       }
       window.editorialAuthorized=true;
-      try{sessionStorage.setItem("midesEditorialAuth","1")}catch(_){ }
       screen.classList.add("ok");
       if(error)error.style.display="none";
       return false;
