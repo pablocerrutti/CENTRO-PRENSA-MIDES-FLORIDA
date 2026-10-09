@@ -24,8 +24,11 @@ function getSheet_() {
 }
 function ensureHeaders_(sh,headers){
   headers=headers||HEADERS;
-  const current=sh.getLastColumn()?sh.getRange(1,1,1,Math.max(sh.getLastColumn(),headers.length)).getValues()[0]:[];
-  headers.forEach((h,i)=>{if(current[i]!==h)sh.getRange(1,i+1).setValue(h);});
+  const width=Math.max(sh.getLastColumn(),headers.length);
+  const current=width?sh.getRange(1,1,1,width).getValues()[0]:[];
+  let changed=false;
+  headers.forEach((h,i)=>{if(current[i]!==h){current[i]=h;changed=true;}});
+  if(changed)sh.getRange(1,1,1,width).setValues([current]);
 }
 function prepararHojasCentroPrensa_(){
   // Crea/normaliza todas las hojas persistentes del Centro de Prensa.
@@ -74,9 +77,12 @@ const MAILING_HEADERS=['ID','Fecha','Asunto','ListaIDs','ComunicadoIDs','Destina
 const CONTACT_SOURCE_SHEET='Contactos', CONTACTS_SHEET='Contactos_Normalizados', LISTS_SHEET='ListasMailing', MEMBERSHIPS_SHEET='Contactos_Listas', CAMPAIGNS_SHEET='Mailing_Campañas';
 function ensureContactsStructure_(){ensureLists_();getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS);getNamedSheet_(CAMPAIGNS_SHEET,CAMPAIGN_HEADERS);}
 function getNamedSheet_(name,headers){
- const ss=getSpreadsheet_();let sh=ss.getSheetByName(name);if(!sh)sh=ss.insertSheet(name);
- if(sh.getLastRow()===0)sh.appendRow(headers);ensureHeaders_(sh,headers);sh.setFrozenRows(1);
- if(sh.getLastColumn()>=headers.length){const h=sh.getRange(1,1,1,headers.length);h.setFontWeight('bold').setBackground('#005ca9').setFontColor('#ffffff');}
+ const ss=getSpreadsheet_();let sh=ss.getSheetByName(name),created=false;
+ if(!sh){sh=ss.insertSheet(name);created=true;}
+ const empty=sh.getLastRow()===0;
+ if(empty)sh.getRange(1,1,1,headers.length).setValues([headers]);
+ ensureHeaders_(sh,headers);
+ if(created||empty){sh.setFrozenRows(1);const h=sh.getRange(1,1,1,headers.length);h.setFontWeight('bold').setBackground('#005ca9').setFontColor('#ffffff');}
  return sh;
 }
 function diagnosticoHojasCentroPrensa_(){
@@ -91,20 +97,32 @@ function sourceContact_(r,m){const val=a=>{const c=firstCol_(m,a);return c>=0?St
 function contactRow_(r){return {id:String(r[0]),nombre:String(r[1]||''),apellido:String(r[2]||''),nombreCompleto:String(r[3]||''),medio:String(r[4]||''),cargo:String(r[5]||''),email:String(r[6]||''),telefono:String(r[7]||''),localidad:String(r[8]||''),listas:String(r[9]||'').split(';').map(x=>x.trim()).filter(Boolean),estado:String(r[10]||'Activo'),observaciones:String(r[11]||''),fechaActualizacion:formatDateTime_(r[12])};}
 function syncContactsNormalized_(){
  const src=contactSource_();if(!src.sheet)throw new Error('No existe la hoja Contactos.');
- const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),out=[],seen={};
+ const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS),out=[],seen={},existing={};
+ if(sh.getLastRow()>1)sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).getValues().forEach(r=>{
+   const key=String(r[6]||'').trim().toLowerCase()||String(r[7]||'').trim()||String(r[3]||'').trim().toLowerCase();
+   if(key)existing[key]=r;
+ });
  src.rows.slice(1).forEach(r=>{
   const o=sourceContact_(r,src.map);if(!(o.nombreCompleto||o.email||o.telefono))return;
-  const id='C-'+Utilities.base64EncodeWebSafe(String(o.email||o.telefono||o.nombreCompleto).toLowerCase()).replace(/=+$/,'').slice(0,36);
+  const key=String(o.email||'').trim().toLowerCase()||String(o.telefono||'').trim()||String(o.nombreCompleto||'').trim().toLowerCase();
+  const id='C-'+Utilities.base64EncodeWebSafe(key).replace(/=+$/,'').slice(0,36);
   if(seen[id])return;seen[id]=1;
-  out.push([id,o.nombre,o.apellido,o.nombreCompleto,o.medio,o.cargo,o.email,o.telefono,o.localidad,'','Activo','',formatDateTime_(new Date())]);
+  const prior=existing[key]||[];
+  out.push([id,o.nombre,o.apellido,o.nombreCompleto,o.medio,o.cargo,o.email,o.telefono,o.localidad,prior[9]||'',prior[10]||'Activo',prior[11]||'',prior[12]||formatDateTime_(new Date())]);
  });
  if(sh.getLastRow()>1)sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).clearContent();
  if(out.length)sh.getRange(2,1,out.length,CONTACT_HEADERS.length).setValues(out);
  SpreadsheetApp.flush();return {imported:out.length,sourceRows:Math.max(0,src.rows.length-1)};
 }
 function readContacts_(){
- syncContactsNormalized_();
- const sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS);if(sh.getLastRow()<2)return [];
+ // La sincronización completa solo se ejecuta al inicializar una hoja vacía o mediante Importar.
+ // No volver a sobrescribir cambios editoriales (estado, observaciones y listas) en cada lectura.
+ let sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS);
+ if(sh.getLastRow()<2){
+   const src=contactSource_();
+   if(src.sheet&&src.rows.length>1){syncContactsNormalized_();sh=getNamedSheet_(CONTACTS_SHEET,CONTACT_HEADERS);}
+ }
+ if(sh.getLastRow()<2)return [];
  const listNames={};listMailingLists_().forEach(x=>listNames[x.id]=x.nombre);
  const memberships={};const ms=getNamedSheet_(MEMBERSHIPS_SHEET,MEMBERSHIP_HEADERS);if(ms.getLastRow()>1)ms.getRange(2,1,ms.getLastRow()-1,3).getValues().forEach(r=>{if(r[0]&&r[1])(memberships[String(r[0])]||(memberships[String(r[0])]=[])).push(listNames[String(r[1])]||String(r[1]));});
  return sh.getRange(2,1,sh.getLastRow()-1,CONTACT_HEADERS.length).getValues().filter(r=>r[0]).map(r=>{const x=contactRow_(r);x.listas=memberships[x.id]||[];return x;});
@@ -243,15 +261,18 @@ function parseAgendaDate_(s){
   if(isNaN(d.getTime()))throw new Error('Fecha u horario inválido.');
   return d;
 }
-function agendaRow_(r){
-  return {id:String(r[0]),usuarioId:String(r[1]),nombreUsuario:String(r[2]||''),area:String(r[3]||''),inicio:String(r[4]||''),fin:String(r[5]||''),actividad:String(r[6]||''),lugar:String(r[7]||''),descripcion:String(r[8]||''),imagenUrl:String(r[9]||''),fechaCreacion:String(r[10]||''),estado:String(r[11]||'Activa'),color:areaColor_(String(r[3]||''))};
+function agendaRow_(r,colorMap){
+  const area=String(r[3]||'');
+  return {id:String(r[0]),usuarioId:String(r[1]),nombreUsuario:String(r[2]||''),area,inicio:String(r[4]||''),fin:String(r[5]||''),actividad:String(r[6]||''),lugar:String(r[7]||''),descripcion:String(r[8]||''),imagenUrl:String(r[9]||''),fechaCreacion:String(r[10]||''),estado:String(r[11]||'Activa'),color:colorMap&&colorMap[normalizeText_(area)]||areaColor_(area)};
 }
 function listAgenda_(from,to){
-  const cache=CacheService.getScriptCache(),cacheKey='agenda_'+Utilities.base64EncodeWebSafe(String(from||'')+'|'+String(to||''));
+  const cache=CacheService.getScriptCache(),version=cache.get('agenda_version')||'0';
+  const cacheKey='agenda_'+version+'_'+Utilities.base64EncodeWebSafe(String(from||'')+'|'+String(to||''));
   const cached=cache.get(cacheKey);if(cached)try{return JSON.parse(cached);}catch(_){}
   const sh=getAgendaSheet_();if(sh.getLastRow()<2)return [];
   const lo=from?parseAgendaDate_(from):new Date(0),hi=to?parseAgendaDate_(to):new Date('2999-12-31T23:59:59');
-  const result=sh.getRange(2,1,sh.getLastRow()-1,AGENDA_HEADERS.length).getValues().filter(r=>r[0]&&String(r[11]||'Activa')==='Activa').map(agendaRow_).filter(x=>{const s=parseAgendaDate_(x.inicio),f=parseAgendaDate_(x.fin);return f>=lo&&s<=hi;});
+  const colors={};listFuncionarios_().forEach(u=>{if(u.area&&!colors[normalizeText_(u.area)])colors[normalizeText_(u.area)]=u.color;});
+  const result=sh.getRange(2,1,sh.getLastRow()-1,AGENDA_HEADERS.length).getValues().filter(r=>r[0]&&String(r[11]||'Activa')==='Activa').map(r=>agendaRow_(r,colors)).filter(x=>{const s=parseAgendaDate_(x.inicio),f=parseAgendaDate_(x.fin);return f>=lo&&s<=hi;});
   try{cache.put(cacheKey,JSON.stringify(result),30);}catch(_){}
   return result;
 }
@@ -270,7 +291,7 @@ function saveAgenda_(p){
   const row=[id,u.id,u.nombre,u.area,inicio,fin,actividad,lugar,descripcion,String(p.imagenUrl||''),now,'Activa'];
   const rows=sh.getDataRange().getValues();let n=-1;for(let i=1;i<rows.length;i++)if(String(rows[i][0])===id){n=i+1;break;}
   if(n<0)sh.appendRow(row);else sh.getRange(n,1,1,AGENDA_HEADERS.length).setValues([row]);
-  try{CacheService.getScriptCache().removeAll([]);}catch(_){}
+  try{CacheService.getScriptCache().put('agenda_version',Utilities.getUuid(),21600);}catch(_){}
   const item=agendaRow_(row);
   return {item,conflict:conflict?agendaRow_(conflict):null,message:conflict?'La actividad fue registrada, pero existe una actividad paralela en el mismo horario. Queda a criterio de la Dirección definir la prioridad.':'Actividad creada correctamente.'};
 }
